@@ -10,6 +10,37 @@
 </head>
 <body>
 
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;font-family:'Nunito',sans-serif;">
+    <img src="mascot.png" alt="Mascot" style="width:100px;animation:float 3s ease-in-out infinite;">
+    <h1 style="font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#e88a9a,#f5c89a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">The Manga Corner</h1>
+    <p style="color:#8a7268;font-size:0.95rem;">Your private manga collection 🌸</p>
+    <button id="google-signin-btn" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:999px;border:1.5px solid #e0d0c8;background:white;color:#3d2e2a;font-size:1rem;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.08);transition:all 0.2s;">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
+    <p id="signin-error" style="display:none;color:#c05050;font-size:0.875rem;font-weight:600;"></p>
+  </div>
+
+  <!-- ===== LOADING SCREEN ===== -->
+  <div id="loading-screen" style="display:none;position:fixed;inset:0;z-index:9998;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1rem;font-family:'Nunito',sans-serif;">
+    <img src="mascot.png" alt="Loading" style="width:80px;animation:float 1.5s ease-in-out infinite;">
+    <p style="color:#e88a9a;font-weight:700;font-size:1rem;">Loading your collection... ☁️</p>
+  </div>
+
+  <!-- ===== SYNC STATUS ===== -->
+  <div id="sync-status" style="display:none;position:fixed;bottom:1.25rem;right:1.25rem;z-index:1000;padding:0.45rem 0.9rem;border-radius:999px;font-size:0.8rem;font-weight:600;font-family:'Nunito',sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.12);align-items:center;gap:0.4rem;pointer-events:none;"></div>
+
+  <style>
+    .sync-status.syncing{background:#fff3cd;color:#856404;}
+    .sync-status.synced{background:#d4edda;color:#155724;}
+    .sync-status.error{background:#f8d7da;color:#721c24;}
+    #google-signin-btn:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.12);}
+  </style>
+
+  <!-- ===== APP WRAPPER (hidden until logged in) ===== -->
+  <div id="app-wrapper" style="display:none;">
+
   <!-- Navbar -->
   <header class="navbar">
     <nav class="nav-container">
@@ -34,6 +65,11 @@
           <span class="theme-icon moon">&#127769;</span>
           <span class="theme-icon sun">&#9728;&#65039;</span>
         </button>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-left:0.5rem;">
+          <img id="user-avatar" style="display:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--primary);" alt="You">
+          <span id="user-name" style="font-size:0.75rem;font-weight:600;color:var(--muted-fg);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button id="signout-btn" title="Sign out" style="background:none;border:none;cursor:pointer;color:var(--muted-fg);font-size:0.75rem;padding:0.25rem 0.5rem;border-radius:999px;transition:all 0.2s;" onmouseover="this.style.background='var(--secondary)'" onmouseout="this.style.background='none'">Sign out</button>
+        </div>
       </div>
       <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -459,7 +495,7 @@
             </div>
             <div class="item-list" id="detail-comments-list"></div>
           </div>
-        </div>
+        </div>https://github.com/ines-guizani/manga-corner/blob/main/index.html
       </div>
     </div>
   </main>
@@ -482,30 +518,7 @@
     </div>
   </footer>
 
-  <!-- Loading screen (shown while fetching data from Firebase) -->
-  <div id="loading-screen" style="
-    display:flex; position:fixed; inset:0; z-index:9999;
-    background:var(--bg,#fff8f5); flex-direction:column;
-    align-items:center; justify-content:center; gap:1rem;">
-    <img src="mascot.png" alt="Loading" style="width:80px; animation:float 1.5s ease-in-out infinite;">
-    <p style="font-family:'Nunito',sans-serif; color:var(--primary,#e88a9a); font-weight:700; font-size:1rem;">
-      Loading your collection... ☁️
-    </p>
-  </div>
-
-  <!-- Sync status badge (bottom-right corner) -->
-  <div id="sync-status" style="
-    display:none; position:fixed; bottom:1.25rem; right:1.25rem; z-index:1000;
-    padding:0.45rem 0.9rem; border-radius:999px; font-size:0.8rem; font-weight:600;
-    font-family:'Nunito',sans-serif; box-shadow:0 2px 12px rgba(0,0,0,0.12);
-    align-items:center; gap:0.4rem; pointer-events:none;">
-  </div>
-
-  <style>
-    .sync-status.syncing { background:#fff3cd; color:#856404; }
-    .sync-status.synced  { background:#d4edda; color:#155724; }
-    .sync-status.error   { background:#f8d7da; color:#721c24; }
-  </style>
+  </div><!-- end app-wrapper -->
 
   <script type="module" src="app.js"></script>
 </body>
