@@ -1,6 +1,5 @@
 /**
- * The Manga Corner — Firebase Cloud Sync Version
- * Data is saved to Firestore and syncs across all your devices automatically!
+ * The Manga Corner — Firebase Cloud Sync + Google Auth Version
  */
 
 // ===== FIREBASE SETUP =====
@@ -9,7 +8,12 @@ import {
   getFirestore, collection, doc,
   getDocs, setDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+// ===== YOUR FIREBASE CONFIG =====
+// ⚠️ This key is restricted to ines-guizani.github.io only — safe to leave here
 const firebaseConfig = {
   apiKey: "AIzaSyA4AqPDWurGDj321-B8DKQRuGtQfl8QULc",
   authDomain: "manga-corner-b0af9.firebaseapp.com",
@@ -19,8 +23,14 @@ const firebaseConfig = {
   appId: "1:493110609888:web:c94b163c51dce675758d85"
 };
 
+// ===== YOUR GOOGLE ACCOUNT EMAIL =====
+// Only this email can access the app
+const OWNER_EMAIL = "inesguizani348@gmail.com";
+
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+const auth = getAuth(firebaseApp);
+const provider = new GoogleAuthProvider();
 
 const MANGAS_COL = collection(db, "mangas");
 
@@ -30,7 +40,6 @@ const DEFAULT_GENRES = [
   'Horror', 'Isekai', 'Mystery', 'Romance', 'Sci-Fi',
   'Slice of Life', 'Sports', 'Supernatural', 'Thriller'
 ];
-
 const THEME_KEY = 'mangaCorner_theme';
 
 // ===== STATE =====
@@ -45,19 +54,101 @@ let state = {
   filters: { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] },
   showFilters: false,
   showGenreManager: false,
+  currentUser: null,
 };
 
-// ===== CLOUD FUNCTIONS =====
+// ===== AUTH =====
+function setupAuth() {
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      // Someone is logged in — check it's YOU
+      if (user.email !== OWNER_EMAIL) {
+        // Wrong account — sign them out immediately
+        signOut(auth);
+        showLoginScreen("⛔ Access denied. This app is private.");
+        return;
+      }
+      // It's you! Hide login, show app
+      state.currentUser = user;
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-wrapper').style.display = 'block';
+      document.getElementById('user-avatar').src = user.photoURL || '';
+      document.getElementById('user-avatar').style.display = 'block';
+      document.getElementById('user-name').textContent = user.displayName || user.email;
+      loadAppData();
+    } else {
+      // No one logged in — show login screen
+      state.currentUser = null;
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('app-wrapper').style.display = 'none';
+      showLoadingScreen(false);
+    }
+  });
 
+  document.getElementById('google-signin-btn').addEventListener('click', async () => {
+    try {
+      document.getElementById('signin-error').style.display = 'none';
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      document.getElementById('signin-error').textContent = 'Sign-in failed. Please try again.';
+      document.getElementById('signin-error').style.display = 'block';
+    }
+  });
+
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    await signOut(auth);
+  });
+}
+
+function showLoginScreen(errorMsg = '') {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-wrapper').style.display = 'none';
+  if (errorMsg) {
+    document.getElementById('signin-error').textContent = errorMsg;
+    document.getElementById('signin-error').style.display = 'block';
+  }
+}
+
+// ===== LOAD APP DATA (called after successful login) =====
+async function loadAppData() {
+  showLoadingScreen(true);
+  try {
+    const [cloudMangas, cloudGenres] = await Promise.all([
+      loadMangasFromCloud(),
+      loadGenresFromCloud()
+    ]);
+    state.mangas = cloudMangas;
+    if (cloudGenres && cloudGenres.length > 0) {
+      state.genres = cloudGenres;
+    } else {
+      state.genres = [...DEFAULT_GENRES];
+      await saveGenresToCloud(state.genres);
+    }
+    await migrateLocalStorageToCloud();
+  } catch (e) {
+    console.error("Cloud load failed:", e);
+    state.mangas = loadFromStorage('mangas_v2', []);
+    state.genres = loadFromStorage('genres_v2', [...DEFAULT_GENRES]);
+    showSyncError();
+  }
+  showLoadingScreen(false);
+  setupNavigation();
+  setupThemeToggle();
+  setupMobileMenu();
+  setupAddPage();
+  setupListPage();
+  setupDetailPage();
+  handleRoute();
+  setupRealtimeSync();
+}
+
+// ===== CLOUD FUNCTIONS =====
 async function saveMangaToCloud(manga) {
   try {
     showSyncing();
     await setDoc(doc(db, "mangas", manga.id), manga);
     showSynced();
-  } catch (e) {
-    console.error("Failed to save manga:", e);
-    showSyncError();
-  }
+  } catch (e) { console.error("Save failed:", e); showSyncError(); }
 }
 
 async function deleteMangaFromCloud(id) {
@@ -65,18 +156,12 @@ async function deleteMangaFromCloud(id) {
     showSyncing();
     await deleteDoc(doc(db, "mangas", id));
     showSynced();
-  } catch (e) {
-    console.error("Failed to delete manga:", e);
-    showSyncError();
-  }
+  } catch (e) { console.error("Delete failed:", e); showSyncError(); }
 }
 
 async function saveGenresToCloud(genres) {
-  try {
-    await setDoc(doc(db, "genres", "list"), { genres });
-  } catch (e) {
-    console.error("Failed to save genres:", e);
-  }
+  try { await setDoc(doc(db, "genres", "list"), { genres }); }
+  catch (e) { console.error("Genres save failed:", e); }
 }
 
 async function loadMangasFromCloud() {
@@ -91,7 +176,7 @@ async function loadGenresFromCloud() {
   return docData ? docData.data().genres : null;
 }
 
-// ===== SYNC STATUS UI =====
+// ===== SYNC STATUS =====
 function showSyncing() {
   const el = document.getElementById('sync-status');
   if (el) { el.textContent = '☁️ Saving...'; el.className = 'sync-status syncing'; el.style.display = 'flex'; }
@@ -110,59 +195,12 @@ function showSyncError() {
   if (el) { el.textContent = '⚠️ Sync error — check connection'; el.className = 'sync-status error'; el.style.display = 'flex'; }
 }
 
-// ===== INIT =====
-async function init() {
-  // Apply theme instantly (no network needed)
-  const savedTheme = localStorage.getItem(THEME_KEY);
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  }
-
-  showLoadingScreen(true);
-
-  try {
-    const [cloudMangas, cloudGenres] = await Promise.all([
-      loadMangasFromCloud(),
-      loadGenresFromCloud()
-    ]);
-
-    state.mangas = cloudMangas;
-
-    if (cloudGenres && cloudGenres.length > 0) {
-      state.genres = cloudGenres;
-    } else {
-      state.genres = [...DEFAULT_GENRES];
-      await saveGenresToCloud(state.genres);
-    }
-
-    // One-time migration from localStorage to cloud
-    await migrateLocalStorageToCloud();
-
-  } catch (e) {
-    console.error("Cloud load failed, using localStorage fallback:", e);
-    state.mangas = loadFromStorage('mangas_v2', []);
-    state.genres = loadFromStorage('genres_v2', [...DEFAULT_GENRES]);
-    showSyncError();
-  }
-
-  showLoadingScreen(false);
-
-  setupNavigation();
-  setupThemeToggle();
-  setupMobileMenu();
-  setupAddPage();
-  setupListPage();
-  setupDetailPage();
-  handleRoute();
-  setupRealtimeSync();
-}
-
 function showLoadingScreen(show) {
   const el = document.getElementById('loading-screen');
   if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-// ===== MIGRATE OLD DATA =====
+// ===== MIGRATION =====
 async function migrateLocalStorageToCloud() {
   if (localStorage.getItem('mangaCorner_migrated_to_cloud')) return;
   const oldMangas = loadFromStorage('mangas_v2', null) || loadFromStorage('mangas', null);
@@ -201,7 +239,7 @@ function setupRealtimeSync() {
   });
 }
 
-// ===== LOCALSTORAGE (fallback only) =====
+// ===== LOCALSTORAGE FALLBACK =====
 function loadFromStorage(key, fallback = null) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
@@ -253,8 +291,7 @@ function handleRoute() {
       state.selectedMangaId = parts[1];
       document.getElementById('page-detail').classList.remove('hidden');
       renderDetail(); break;
-    default:
-      navigate('home');
+    default: navigate('home');
   }
 
   document.getElementById('mobile-menu').classList.remove('open');
@@ -263,6 +300,10 @@ function handleRoute() {
 
 // ===== THEME =====
 function setupThemeToggle() {
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     if (isDark) {
@@ -826,7 +867,6 @@ function renderDetail() {
     coverEl.src = ''; coverEl.classList.add('hidden'); fallbackEl.classList.remove('hidden');
   }
   document.getElementById('cover-change-overlay').classList.toggle('hidden', !state.editMode);
-
   document.getElementById('detail-readonly').classList.toggle('hidden', state.editMode);
   document.getElementById('detail-edit').classList.toggle('hidden', !state.editMode);
 
@@ -856,7 +896,6 @@ function renderDetail() {
     const otherEl = document.getElementById('detail-view-other');
     if (manga.otherTitles) { otherEl.textContent = manga.otherTitles; otherEl.style.display = 'block'; }
     else { otherEl.style.display = 'none'; }
-
     const myClass = manga.myStatus.startsWith('Completed') ? 'my-completed'
       : manga.myStatus.startsWith('Dropped') ? 'my-dropped'
       : manga.myStatus.startsWith('In Chapter') ? 'my-inchapter' : 'my-default';
@@ -899,12 +938,9 @@ function startEditing() {
   if (!manga) return;
   state.editMode = true;
   state.detailEdit = {
-    title: manga.title,
-    otherTitles: manga.otherTitles,
-    mangaStatus: manga.mangaStatus,
-    myStatus: manga.myStatus,
-    summary: manga.summary,
-    cover: manga.cover,
+    title: manga.title, otherTitles: manga.otherTitles,
+    mangaStatus: manga.mangaStatus, myStatus: manga.myStatus,
+    summary: manga.summary, cover: manga.cover,
     chapters: [...manga.favoriteChapters],
     photos: [...manga.favoritePhotos],
     comments: [...manga.comments],
@@ -964,4 +1000,4 @@ function escapeHtml(text) {
 }
 
 // ===== START =====
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', setupAuth);
