@@ -9,7 +9,7 @@ import {
   getDocs, setDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ===== YOUR FIREBASE CONFIG =====
@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // ===== YOUR GOOGLE ACCOUNT EMAIL =====
 // Only this email can access the app
-const OWNER_EMAIL = "inesguizani348@gmail.com";
+const OWNER_EMAIL = "YOUR_GOOGLE_EMAIL@gmail.com";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
@@ -59,11 +59,21 @@ let state = {
 
 // ===== AUTH =====
 function setupAuth() {
+  // Handle redirect result when page loads after Google login
+  getRedirectResult(auth).then((result) => {
+    if (result && result.user) {
+      console.log('Redirect sign-in successful:', result.user.email);
+    }
+  }).catch((e) => {
+    console.error('Redirect result error:', e);
+    document.getElementById('signin-error').textContent = 'Sign-in failed: ' + e.message;
+    document.getElementById('signin-error').style.display = 'block';
+  });
+
   onAuthStateChanged(auth, (user) => {
     if (user) {
       // Someone is logged in — check it's YOU
       if (user.email !== OWNER_EMAIL) {
-        // Wrong account — sign them out immediately
         signOut(auth);
         showLoginScreen("⛔ Access denied. This app is private.");
         return;
@@ -88,9 +98,11 @@ function setupAuth() {
   document.getElementById('google-signin-btn').addEventListener('click', async () => {
     try {
       document.getElementById('signin-error').style.display = 'none';
-      await signInWithPopup(auth, provider);
+      document.getElementById('google-signin-btn').textContent = 'Redirecting...';
+      // Redirect is more reliable than popup on GitHub Pages
+      await signInWithRedirect(auth, provider);
     } catch (e) {
-      document.getElementById('signin-error').textContent = 'Sign-in failed. Please try again.';
+      document.getElementById('signin-error').textContent = 'Sign-in failed: ' + e.message;
       document.getElementById('signin-error').style.display = 'block';
     }
   });
