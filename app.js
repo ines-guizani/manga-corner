@@ -9,7 +9,7 @@ import {
   getDocs, setDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ===== YOUR FIREBASE CONFIG =====
@@ -100,7 +100,7 @@ function setupAuth() {
       document.getElementById('signin-error').style.display = 'none';
       document.getElementById('google-signin-btn').textContent = 'Redirecting...';
       // Redirect is more reliable than popup on GitHub Pages
-      await signInWithRedirect(auth, provider);
+      await signInWithPopup(auth, provider);
     } catch (e) {
       document.getElementById('signin-error').textContent = 'Sign-in failed: ' + e.message;
       document.getElementById('signin-error').style.display = 'block';
