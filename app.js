@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // ===== YOUR GOOGLE ACCOUNT EMAIL =====
 // Only this email can access the app
-const OWNER_EMAIL = "YOUR_GOOGLE_EMAIL@gmail.com";
+const OWNER_EMAIL = "inesguizani348@gmail.com";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
