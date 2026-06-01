@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,37 +10,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-  <!-- ===== LOGIN SCREEN ===== -->
-  <div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;font-family:'Nunito',sans-serif;">
-    <img src="mascot.png" alt="Mascot" style="width:100px;animation:float 3s ease-in-out infinite;">
-    <h1 style="font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#e88a9a,#f5c89a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">The Manga Corner</h1>
-    <p style="color:#8a7268;font-size:0.95rem;">Your private manga collection 🌸</p>
-    <button id="google-signin-btn" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:999px;border:1.5px solid #e0d0c8;background:white;color:#3d2e2a;font-size:1rem;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.08);transition:all 0.2s;">
-      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Sign in with Google
-    </button>
-    <p id="signin-error" style="display:none;color:#c05050;font-size:0.875rem;font-weight:600;"></p>
-  </div>
-
-  <!-- ===== LOADING SCREEN ===== -->
-  <div id="loading-screen" style="display:none;position:fixed;inset:0;z-index:9998;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1rem;font-family:'Nunito',sans-serif;">
-    <img src="mascot.png" alt="Loading" style="width:80px;animation:float 1.5s ease-in-out infinite;">
-    <p style="color:#e88a9a;font-weight:700;font-size:1rem;">Loading your collection... ☁️</p>
-  </div>
-
-  <!-- ===== SYNC STATUS ===== -->
-  <div id="sync-status" style="display:none;position:fixed;bottom:1.25rem;right:1.25rem;z-index:1000;padding:0.45rem 0.9rem;border-radius:999px;font-size:0.8rem;font-weight:600;font-family:'Nunito',sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.12);align-items:center;gap:0.4rem;pointer-events:none;"></div>
-
-  <style>
-    .sync-status.syncing{background:#fff3cd;color:#856404;}
-    .sync-status.synced{background:#d4edda;color:#155724;}
-    .sync-status.error{background:#f8d7da;color:#721c24;}
-    #google-signin-btn:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.12);}
-  </style>
-
-  <!-- ===== APP WRAPPER (hidden until logged in) ===== -->
-  <div id="app-wrapper" style="display:none;">
 
   <!-- Navbar -->
   <header class="navbar">
@@ -65,11 +35,6 @@
           <span class="theme-icon moon">&#127769;</span>
           <span class="theme-icon sun">&#9728;&#65039;</span>
         </button>
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-left:0.5rem;">
-          <img id="user-avatar" style="display:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--primary);" alt="You">
-          <span id="user-name" style="font-size:0.75rem;font-weight:600;color:var(--muted-fg);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <button id="signout-btn" title="Sign out" style="background:none;border:none;cursor:pointer;color:var(--muted-fg);font-size:0.75rem;padding:0.25rem 0.5rem;border-radius:999px;transition:all 0.2s;" onmouseover="this.style.background='var(--secondary)'" onmouseout="this.style.background='none'">Sign out</button>
-        </div>
       </div>
       <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -239,12 +204,30 @@
           <textarea id="summary" class="input textarea" rows="4" placeholder="Write a brief description..."></textarea>
         </div>
 
+        <!-- Rating & Year -->
+        <div class="card">
+          <h3 class="card-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Rating & Year</h3>
+          <div class="row-2">
+            <div class="field">
+              <label class="field-label">My Rating</label>
+              <div class="star-rating" id="star-rating-add">
+                <span class="star-hint">Tap a star to rate out of 10</span>
+                <div class="stars-row" id="stars-add"></div>
+                <input type="hidden" id="manga-rating" value="0">
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Year of Release</label>
+              <input type="number" id="manga-year" class="input" min="1900" max="2100" placeholder="e.g. 2003">
+            </div>
+          </div>
+        </div>
+
         <!-- Tabs: Chapters / Photos / Comments -->
         <div class="card card-tabs">
           <div class="tab-bar">
             <button type="button" class="tab-btn active" data-tab="chapters">Chapters <span class="tab-count" id="tab-count-chapters">0</span></button>
             <button type="button" class="tab-btn" data-tab="photos">Photos <span class="tab-count" id="tab-count-photos">0</span></button>
-            <button type="button" class="tab-btn" data-tab="comments">Comments <span class="tab-count" id="tab-count-comments">0</span></button>
           </div>
 
           <!-- Chapters Tab -->
@@ -269,16 +252,6 @@
             <div class="photo-grid" id="photo-grid"></div>
           </div>
 
-          <!-- Comments Tab -->
-          <div class="tab-content hidden" id="tab-comments">
-            <div class="row-flex">
-              <input type="text" id="comment-input" class="input" placeholder="Write a comment...">
-              <button type="button" id="add-comment-btn" class="btn btn-primary btn-sm">Add</button>
-            </div>
-            <div class="item-list" id="comments-list">
-              <p class="empty-hint">No comments yet. Share your thoughts!</p>
-            </div>
-          </div>
         </div>
 
         <!-- Submit -->
@@ -302,6 +275,16 @@
           <p class="subtitle" id="list-subtitle">0 mangas total</p>
         </div>
         <div class="list-actions">
+          <select id="sort-select" class="input input-sm" style="width:auto;min-width:130px;">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="title-az">Title A→Z</option>
+            <option value="title-za">Title Z→A</option>
+            <option value="rating-high">Highest Rated</option>
+            <option value="rating-low">Lowest Rated</option>
+            <option value="year-new">Year (New→Old)</option>
+            <option value="year-old">Year (Old→New)</option>
+          </select>
           <button class="btn btn-filter" id="toggle-filters">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Filters
@@ -356,6 +339,9 @@
       <!-- Manga Grid -->
       <div class="manga-grid" id="manga-grid"></div>
 
+      <!-- Pagination -->
+      <div class="pagination" id="pagination" style="display:none;"></div>
+
       <!-- Empty State -->
       <div class="empty-state hidden" id="empty-state">
         <img src="empty-state.png" alt="No manga" class="empty-img">
@@ -406,6 +392,7 @@
               <h1 class="detail-title" id="detail-view-title"></h1>
               <p class="detail-other" id="detail-view-other"></p>
               <div class="detail-badges" id="detail-view-badges"></div>
+              <div class="detail-rating-year" id="detail-view-rating-year"></div>
               <div class="detail-genres" id="detail-view-genres"></div>
               <div class="detail-summary-box" id="detail-view-summary"></div>
             </div>
@@ -451,6 +438,19 @@
                 <label class="field-label">Summary</label>
                 <textarea id="detail-edit-summary" class="input textarea" rows="4"></textarea>
               </div>
+              <div class="row-2">
+                <div class="field">
+                  <label class="field-label">My Rating</label>
+                  <div class="star-rating" id="star-rating-detail">
+                    <div class="stars-row" id="stars-detail"></div>
+                    <input type="hidden" id="detail-edit-rating" value="0">
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="field-label">Year of Release</label>
+                  <input type="number" id="detail-edit-year" class="input" min="1900" max="2100" placeholder="e.g. 2003">
+                </div>
+              </div>
               <div class="detail-edit-actions">
                 <button class="btn btn-primary" id="save-btn">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -467,7 +467,6 @@
           <div class="tab-bar">
             <button type="button" class="tab-btn active" data-detail-tab="chapters">Chapters <span class="tab-count" id="detail-tab-count-chapters">0</span></button>
             <button type="button" class="tab-btn" data-detail-tab="photos">Photos <span class="tab-count" id="detail-tab-count-photos">0</span></button>
-            <button type="button" class="tab-btn" data-detail-tab="comments">Comments <span class="tab-count" id="detail-tab-count-comments">0</span></button>
           </div>
 
           <div class="tab-content active" id="detail-tab-chapters">
@@ -488,14 +487,7 @@
             <div class="photo-grid" id="detail-photo-grid"></div>
           </div>
 
-          <div class="tab-content hidden" id="detail-tab-comments">
-            <div class="edit-row hidden" id="detail-comment-edit-row">
-              <input type="text" id="detail-comment-input" class="input" placeholder="Write a comment...">
-              <button type="button" id="detail-add-comment-btn" class="btn btn-primary btn-sm">Add</button>
-            </div>
-            <div class="item-list" id="detail-comments-list"></div>
-          </div>
-        </div>https://github.com/ines-guizani/manga-corner/blob/main/index.html
+        </div>
       </div>
     </div>
   </main>
@@ -503,23 +495,23 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="footer-inner">
-      <div class="footer-left">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-        Read manga online:
-        <a href="https://lekmanga.com/" target="_blank" rel="noopener" class="footer-link">Mangalek</a>,
-        <a href="https://azoramoon.com/" target="_blank" rel="noopener" class="footer-link">Azora</a>,
-        <a href="https://gmanga.org/" target="_blank" rel="noopener" class="footer-link">GManga</a>
-      </div>
-      <div class="footer-right">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:hsl(var(--primary))"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        2025 The Manga Corner
+      <div class="footer-right" style="width:100%;justify-content:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        The Manga Corner
         <img src="mascot.png" alt="" class="footer-mascot">
       </div>
     </div>
   </footer>
 
-  </div><!-- end app-wrapper -->
+  <!-- Photo Lightbox -->
+  <div id="photo-lightbox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);align-items:center;justify-content:center;flex-direction:column;">
+    <button id="lightbox-close" style="position:absolute;top:1.25rem;right:1.25rem;background:rgba(255,255,255,0.15);border:none;color:white;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#10005;</button>
+    <button id="lightbox-prev" style="position:absolute;left:1rem;background:rgba(255,255,255,0.15);border:none;color:white;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#8249;</button>
+    <button id="lightbox-next" style="position:absolute;right:1rem;background:rgba(255,255,255,0.15);border:none;color:white;width:44px;height:44px;border-radius:50%;font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#8250;</button>
+    <img id="lightbox-img" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px;">
+    <p id="lightbox-counter" style="color:rgba(255,255,255,0.6);font-size:0.875rem;margin-top:0.75rem;font-family:'Nunito',sans-serif;"></p>
+  </div>
 
-  <script type="module" src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
