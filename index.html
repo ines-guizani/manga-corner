@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="mascot.png">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+<base target="_blank">
 </head>
 <body>
 
@@ -231,6 +232,27 @@
             <label class="field-label">Current chapter</label>
             <input type="number" id="current-chapter" class="input" min="1" placeholder="Chapter number...">
           </div>
+            <div class="field">
+              <label class="field-label">Rating (0-10)</label>
+              <div class="star-rating-input" id="add-rating-stars">
+                <span class="star" data-value="1">&#9733;</span>
+                <span class="star" data-value="2">&#9733;</span>
+                <span class="star" data-value="3">&#9733;</span>
+                <span class="star" data-value="4">&#9733;</span>
+                <span class="star" data-value="5">&#9733;</span>
+                <span class="star" data-value="6">&#9733;</span>
+                <span class="star" data-value="7">&#9733;</span>
+                <span class="star" data-value="8">&#9733;</span>
+                <span class="star" data-value="9">&#9733;</span>
+                <span class="star" data-value="10">&#9733;</span>
+                <span class="rating-value" id="add-rating-value">0</span>
+              </div>
+              <input type="hidden" id="rating-input" value="0">
+            </div>
+            <div class="field">
+              <label class="field-label">Year of Creation</label>
+              <input type="number" id="year-created" class="input" min="1900" max="2099" placeholder="e.g. 2020">
+            </div>
         </div>
 
         <!-- Summary -->
@@ -244,8 +266,7 @@
           <div class="tab-bar">
             <button type="button" class="tab-btn active" data-tab="chapters">Chapters <span class="tab-count" id="tab-count-chapters">0</span></button>
             <button type="button" class="tab-btn" data-tab="photos">Photos <span class="tab-count" id="tab-count-photos">0</span></button>
-            <button type="button" class="tab-btn" data-tab="comments">Comments <span class="tab-count" id="tab-count-comments">0</span></button>
-          </div>
+                      </div>
 
           <!-- Chapters Tab -->
           <div class="tab-content active" id="tab-chapters">
@@ -269,16 +290,7 @@
             <div class="photo-grid" id="photo-grid"></div>
           </div>
 
-          <!-- Comments Tab -->
-          <div class="tab-content hidden" id="tab-comments">
-            <div class="row-flex">
-              <input type="text" id="comment-input" class="input" placeholder="Write a comment...">
-              <button type="button" id="add-comment-btn" class="btn btn-primary btn-sm">Add</button>
-            </div>
-            <div class="item-list" id="comments-list">
-              <p class="empty-hint">No comments yet. Share your thoughts!</p>
-            </div>
-          </div>
+          
         </div>
 
         <!-- Submit -->
@@ -321,6 +333,24 @@
         <button class="search-clear hidden" id="search-clear">&#10005;</button>
       </div>
 
+      <!-- Sort & Pagination Controls -->
+      <div class="list-controls">
+        <div class="sort-control">
+          <label class="field-label" style="margin-bottom:0.25rem;">Sort by</label>
+          <select id="sort-by" class="input" style="min-width:160px;">
+            <option value="newest">Newest Added</option>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="title-desc">Title (Z-A)</option>
+            <option value="rating-desc">Rating (High-Low)</option>
+            <option value="rating-asc">Rating (Low-High)</option>
+            <option value="year-desc">Year (Newest)</option>
+            <option value="year-asc">Year (Oldest)</option>
+          </select>
+        </div>
+        <div class="pagination-info" id="pagination-info"></div>
+      </div>
+
+      <!-- Pagination Top -->
       <!-- Filters Panel -->
       <div class="filters-panel hidden" id="filters-panel">
         <div class="filters-row">
@@ -355,6 +385,10 @@
 
       <!-- Manga Grid -->
       <div class="manga-grid" id="manga-grid"></div>
+
+
+      <!-- Pagination Bottom -->
+      <div class="pagination" id="pagination-bottom"></div>
 
       <!-- Empty State -->
       <div class="empty-state hidden" id="empty-state">
@@ -406,7 +440,8 @@
               <h1 class="detail-title" id="detail-view-title"></h1>
               <p class="detail-other" id="detail-view-other"></p>
               <div class="detail-badges" id="detail-view-badges"></div>
-              <div class="detail-genres" id="detail-view-genres"></div>
+              <div class="detail-rating" id="detail-view-rating"></div>
+          <div class="detail-genres" id="detail-view-genres"></div>
               <div class="detail-summary-box" id="detail-view-summary"></div>
             </div>
 
@@ -432,6 +467,26 @@
                   <label class="field-label">My Status</label>
                   <input type="text" id="detail-edit-my-status" class="input">
                 </div>
+              </div>              <div class="field">
+                <label class="field-label">Rating (0-10)</label>
+                <div class="star-rating-input" id="detail-rating-stars">
+                  <span class="star" data-value="1">&#9733;</span>
+                  <span class="star" data-value="2">&#9733;</span>
+                  <span class="star" data-value="3">&#9733;</span>
+                  <span class="star" data-value="4">&#9733;</span>
+                  <span class="star" data-value="5">&#9733;</span>
+                  <span class="star" data-value="6">&#9733;</span>
+                  <span class="star" data-value="7">&#9733;</span>
+                  <span class="star" data-value="8">&#9733;</span>
+                  <span class="star" data-value="9">&#9733;</span>
+                  <span class="star" data-value="10">&#9733;</span>
+                  <span class="rating-value" id="detail-rating-value">0</span>
+                </div>
+                <input type="hidden" id="detail-rating-input" value="0">
+              </div>
+              <div class="field">
+                <label class="field-label">Year of Creation</label>
+                <input type="number" id="detail-edit-year" class="input" min="1900" max="2099" placeholder="e.g. 2020">
               </div>
               <div class="field">
                 <div class="genre-header">
@@ -467,8 +522,7 @@
           <div class="tab-bar">
             <button type="button" class="tab-btn active" data-detail-tab="chapters">Chapters <span class="tab-count" id="detail-tab-count-chapters">0</span></button>
             <button type="button" class="tab-btn" data-detail-tab="photos">Photos <span class="tab-count" id="detail-tab-count-photos">0</span></button>
-            <button type="button" class="tab-btn" data-detail-tab="comments">Comments <span class="tab-count" id="detail-tab-count-comments">0</span></button>
-          </div>
+                      </div>
 
           <div class="tab-content active" id="detail-tab-chapters">
             <div class="edit-row hidden" id="detail-chapter-edit-row">
@@ -495,7 +549,7 @@
             </div>
             <div class="item-list" id="detail-comments-list"></div>
           </div>
-        </div>https://github.com/ines-guizani/manga-corner/blob/main/index.html
+        </div>
       </div>
     </div>
   </main>
@@ -517,6 +571,21 @@
       </div>
     </div>
   </footer>
+
+
+  <!-- ===== LIGHTBOX ===== -->
+  <div id="lightbox" class="lightbox hidden">
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-content">
+      <button class="lightbox-close" id="lightbox-close">&times;</button>
+      <img id="lightbox-img" src="" alt="Full size">
+      <div class="lightbox-nav">
+        <button class="lightbox-prev" id="lightbox-prev">&#10094;</button>
+        <button class="lightbox-next" id="lightbox-next">&#10095;</button>
+      </div>
+      <div class="lightbox-counter" id="lightbox-counter"></div>
+    </div>
+  </div>
 
   </div><!-- end app-wrapper -->
 
