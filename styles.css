@@ -1183,3 +1183,104 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   border-radius: 0.75rem;
 }
 .comment-bubble p { font-size: 0.875rem; flex: 1; }
+
+
+/* ===== STAR RATING ===== */
+.star-rating { display: flex; flex-direction: column; gap: 0.4rem; }
+.star-hint { font-size: 0.75rem; color: var(--muted-fg); }
+.stars-row { display: flex; gap: 2px; flex-wrap: wrap; }
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #d1c4b8;
+  padding: 1px;
+  transition: transform 0.1s, color 0.1s;
+  line-height: 1;
+}
+.star-btn.active, .star-btn.hover { color: #f5c542; }
+.star-btn:hover { transform: scale(1.2); }
+
+/* Stars on manga card */
+.card-stars {
+  font-size: 0.7rem;
+  color: #f5c542;
+  letter-spacing: -1px;
+  margin-bottom: 0.1rem;
+  line-height: 1;
+}
+
+/* Stars on detail page */
+.detail-stars {
+  font-size: 1.1rem;
+  color: #f5c542;
+  letter-spacing: -1px;
+}
+.detail-rating-num {
+  font-size: 0.85rem;
+  color: var(--muted-fg);
+  font-weight: 600;
+}
+.detail-rating-year {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  flex-wrap: wrap;
+}
+
+/* Year badge on card */
+.card-year {
+  font-size: 0.68rem;
+  color: var(--muted-fg);
+  background: var(--muted);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}
+
+/* ===== PAGINATION ===== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1.5rem 0;
+  flex-wrap: wrap;
+}
+.page-btn {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0 0.5rem;
+}
+.page-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--secondary);
+}
+.page-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.page-btn.page-nav { font-size: 1.2rem; }
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ===== SORT SELECT ===== */
+#sort-select { font-size: 0.8rem; padding: 0.4rem 0.6rem; }
+
+/* ===== PHOTO LIGHTBOX ===== */
+#lightbox-prev, #lightbox-next { transition: background 0.2s; }
+#lightbox-prev:hover, #lightbox-next:hover { background: rgba(255,255,255,0.3) !important; }
+#lightbox-close:hover { background: rgba(255,255,255,0.3) !important; }
+.photo-item img { transition: opacity 0.2s; }
+.photo-item img:hover { opacity: 0.85; }
