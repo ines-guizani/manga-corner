@@ -1202,9 +1202,6 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   color: #f5c89a;
   transform: scale(1.15);
 }
-.star-rating-input .star.half {
-  position: relative;
-}
 .rating-value {
   margin-left: 0.5rem;
   font-size: 0.875rem;
