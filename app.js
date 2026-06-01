@@ -1,6 +1,6 @@
 /**
  * The Manga Corner — Firebase Cloud Sync + Google Auth Version
- * Updated: Removed comments, added star rating, year, pagination, sorting, lightbox
+ * Fixed: Rating, Year, Pagination, Photos, Filters
  */
 
 // ===== FIREBASE SETUP =====
@@ -13,7 +13,6 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-// ===== YOUR FIREBASE CONFIG =====
 const firebaseConfig = {
   apiKey: "AIzaSyA4AqPDWurGDj321-B8DKQRuGtQfl8QULc",
   authDomain: "manga-corner-b0af9.firebaseapp.com",
@@ -115,7 +114,14 @@ async function loadAppData() {
       loadMangasFromCloud(),
       loadGenresFromCloud()
     ]);
-    state.mangas = cloudMangas;
+
+    // Ensure all mangas have rating and year fields
+    state.mangas = cloudMangas.map(m => ({
+      ...m,
+      rating: m.rating ?? 0,
+      year: m.year ?? ''
+    }));
+
     if (cloudGenres && cloudGenres.length > 0) {
       state.genres = cloudGenres;
     } else {
@@ -145,7 +151,13 @@ async function loadAppData() {
 async function saveMangaToCloud(manga) {
   try {
     showSyncing();
-    await setDoc(doc(db, "mangas", manga.id), manga);
+    // Ensure rating and year are always present
+    const cleanManga = {
+      ...manga,
+      rating: manga.rating ?? 0,
+      year: manga.year ?? ''
+    };
+    await setDoc(doc(db, "mangas", cleanManga.id), cleanManga);
     showSynced();
   } catch (e) { console.error("Save failed:", e); showSyncError(); }
 }
@@ -214,8 +226,8 @@ async function migrateLocalStorageToCloud() {
         myStatus: manga.myStatus || "Didn't start yet",
         summary: manga.summary || '',
         cover: manga.cover || '',
-        rating: manga.rating || 0,
-        year: manga.year || '',
+        rating: manga.rating ?? 0,
+        year: manga.year ?? '',
         favoriteChapters: manga.favoriteChapters || [],
         favoritePhotos: manga.favoritePhotos || [],
         createdAt: manga.createdAt || new Date().toISOString(),
@@ -230,8 +242,12 @@ async function migrateLocalStorageToCloud() {
 // ===== REAL-TIME SYNC =====
 function setupRealtimeSync() {
   onSnapshot(MANGAS_COL, (snapshot) => {
-    const incoming = snapshot.docs.map(d => d.data());
-    if (incoming.length !== state.mangas.length) {
+    const incoming = snapshot.docs.map(d => ({
+      ...d.data(),
+      rating: d.data().rating ?? 0,
+      year: d.data().year ?? ''
+    }));
+    if (JSON.stringify(incoming) !== JSON.stringify(state.mangas)) {
       state.mangas = incoming;
       if (state.currentPage === 'home') renderHome();
       if (state.currentPage === 'list') renderList();
@@ -343,7 +359,7 @@ function setupStarRating(containerId, hiddenInputId, valueDisplayId, initialValu
   const container = document.getElementById(containerId);
   const hiddenInput = document.getElementById(hiddenInputId);
   const valueDisplay = document.getElementById(valueDisplayId);
-  if (!container) return;
+  if (!container) return null;
 
   const stars = container.querySelectorAll('.star');
   let currentValue = initialValue;
@@ -432,9 +448,17 @@ function renderAllGenrePills() {
   if (state.currentPage === 'list') {
     renderGenrePills('filter-genre-pills', state.filters.genres, (g) => {
       toggleArray(state.filters.genres, g);
+      state.listPage = 1;
       renderList();
       renderAllGenrePills();
     });
+  }
+  if (state.currentPage === 'detail' && state.editMode) {
+    renderGenrePills('detail-genre-pills', state.detailEdit.selectedGenres, (g) => {
+      toggleArray(state.detailEdit.selectedGenres, g);
+      renderDetailGenrePills();
+    });
+    renderDetailManagedGenres();
   }
 }
 
@@ -524,7 +548,7 @@ function setupAddPage() {
     document.getElementById('current-field').classList.toggle('hidden', myStatus.value !== 'In Chapter');
   });
 
-  // Setup star rating
+  // Setup star rating for add form
   addRatingControl = setupStarRating('add-rating-stars', 'rating-input', 'add-rating-value', 0, (val) => {
     state.addForm.rating = val;
   });
@@ -544,15 +568,23 @@ function setupAddPage() {
     updateTabCount('tab-count-chapters', state.addForm.chapters.length);
   });
 
-  document.getElementById('photo-upload').addEventListener('click', () => {
-    document.getElementById('photo-input').click();
+  // Photo upload - FIX: use proper event delegation
+  const photoUpload = document.getElementById('photo-upload');
+  const photoInput = document.getElementById('photo-input');
+
+  photoUpload.addEventListener('click', () => {
+    photoInput.click();
   });
-  document.getElementById('photo-input').addEventListener('change', async (e) => {
+
+  photoInput.addEventListener('change', async (e) => {
     const files = Array.from(e.target.files);
+    if (files.length === 0) return;
     const dataUrls = await Promise.all(files.map(fileToBase64));
     state.addForm.photos.push(...dataUrls);
     renderPhotos('photo-grid', state.addForm.photos, true);
     updateTabCount('tab-count-photos', state.addForm.photos.length);
+    // Reset input so same files can be selected again
+    photoInput.value = '';
   });
 
   document.getElementById('add-form').addEventListener('submit', async (e) => {
@@ -662,6 +694,7 @@ function renderPhotos(containerId, photos, editable) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (photos.length === 0) { container.innerHTML = ''; return; }
+
   container.innerHTML = photos.map((src, i) => `
     <div class="photo-item" data-idx="${i}">
       <img src="${src}" alt="Photo ${i + 1}">
@@ -669,7 +702,7 @@ function renderPhotos(containerId, photos, editable) {
     </div>
   `).join('');
 
-  // Add click to open lightbox (for viewing)
+  // Add click to open lightbox (for viewing) - only on the image, not the remove button
   container.querySelectorAll('.photo-item').forEach(item => {
     item.addEventListener('click', (e) => {
       if (e.target.closest('.photo-remove')) return;
@@ -680,7 +713,8 @@ function renderPhotos(containerId, photos, editable) {
 
   if (editable) {
     container.querySelectorAll('.photo-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         photos.splice(parseInt(btn.dataset.idx), 1);
         renderPhotos(containerId, photos, editable);
         updateTabCount(containerId === 'photo-grid' ? 'tab-count-photos' : 'detail-tab-count-photos', photos.length);
@@ -692,6 +726,7 @@ function renderPhotos(containerId, photos, editable) {
 // ===== LIGHTBOX =====
 function setupLightbox() {
   const lightbox = document.getElementById('lightbox');
+  if (!lightbox) return;
   const closeBtn = document.getElementById('lightbox-close');
   const prevBtn = document.getElementById('lightbox-prev');
   const nextBtn = document.getElementById('lightbox-next');
@@ -747,12 +782,14 @@ function nextLightboxPhoto() {
 function setupListPage() {
   const searchInput = document.getElementById('search-input');
   const searchClear = document.getElementById('search-clear');
+
   searchInput.addEventListener('input', () => {
     state.filters.search = searchInput.value;
     state.listPage = 1;
     searchClear.classList.toggle('hidden', !searchInput.value);
     renderList();
   });
+
   searchClear.addEventListener('click', () => {
     searchInput.value = '';
     state.filters.search = '';
@@ -760,21 +797,29 @@ function setupListPage() {
     searchClear.classList.add('hidden');
     renderList();
   });
-  document.getElementById('toggle-filters').addEventListener('click', () => {
+
+  // FILTER TOGGLE - FIX: ensure proper class toggling
+  const toggleFiltersBtn = document.getElementById('toggle-filters');
+  const filtersPanel = document.getElementById('filters-panel');
+
+  toggleFiltersBtn.addEventListener('click', () => {
     state.showFilters = !state.showFilters;
-    document.getElementById('filters-panel').classList.toggle('hidden', !state.showFilters);
-    document.getElementById('toggle-filters').classList.toggle('active', state.showFilters);
+    filtersPanel.classList.toggle('hidden', !state.showFilters);
+    toggleFiltersBtn.classList.toggle('active', state.showFilters);
   });
+
   document.getElementById('filter-manga-status').addEventListener('change', (e) => {
     state.filters.mangaStatus = e.target.value;
     state.listPage = 1;
     renderList();
   });
+
   document.getElementById('filter-my-status').addEventListener('change', (e) => {
     state.filters.myStatus = e.target.value;
     state.listPage = 1;
     renderList();
   });
+
   document.getElementById('clear-filters').addEventListener('click', () => {
     state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
     state.showFilters = false;
@@ -783,8 +828,8 @@ function setupListPage() {
     searchClear.classList.add('hidden');
     document.getElementById('filter-manga-status').value = 'All';
     document.getElementById('filter-my-status').value = 'All';
-    document.getElementById('filters-panel').classList.add('hidden');
-    document.getElementById('toggle-filters').classList.remove('active');
+    filtersPanel.classList.add('hidden');
+    toggleFiltersBtn.classList.remove('active');
     renderList();
     renderAllGenrePills();
   });
@@ -801,23 +846,23 @@ function getFilteredAndSortedMangas() {
   const { search, mangaStatus, myStatus, genres } = state.filters;
   let filtered = state.mangas.filter(m => {
     const matchSearch = !search ||
-      m.title.toLowerCase().includes(search.toLowerCase()) ||
+      (m.title && m.title.toLowerCase().includes(search.toLowerCase())) ||
       (m.otherTitles && m.otherTitles.toLowerCase().includes(search.toLowerCase()));
     const matchMangaStatus = mangaStatus === 'All' || m.mangaStatus === mangaStatus;
-    const matchMyStatus = myStatus === 'All' || m.myStatus.startsWith(myStatus);
-    const matchGenre = genres.length === 0 || genres.some(g => m.genre.includes(g));
+    const matchMyStatus = myStatus === 'All' || (m.myStatus && m.myStatus.startsWith(myStatus));
+    const matchGenre = genres.length === 0 || genres.some(g => m.genre && m.genre.includes(g));
     return matchSearch && matchMangaStatus && matchMyStatus && matchGenre;
   });
 
   // Sort
   filtered.sort((a, b) => {
     switch (state.sortBy) {
-      case 'title-asc': return a.title.localeCompare(b.title);
-      case 'title-desc': return b.title.localeCompare(a.title);
+      case 'title-asc': return (a.title || '').localeCompare(b.title || '');
+      case 'title-desc': return (b.title || '').localeCompare(a.title || '');
       case 'rating-desc': return (b.rating || 0) - (a.rating || 0);
       case 'rating-asc': return (a.rating || 0) - (b.rating || 0);
-      case 'year-desc': return (b.year || 0) - (a.year || 0);
-      case 'year-asc': return (a.year || 9999) - (b.year || 9999);
+      case 'year-desc': return (parseInt(b.year) || 0) - (parseInt(a.year) || 0);
+      case 'year-asc': return (parseInt(a.year) || 9999) - (parseInt(b.year) || 9999);
       case 'newest': default: return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     }
   });
@@ -826,7 +871,7 @@ function getFilteredAndSortedMangas() {
 }
 
 function renderPagination(totalItems, currentPage, containerId) {
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -891,8 +936,10 @@ function renderList() {
   const pageItems = filtered.slice(start, end);
 
   const subtitle = document.getElementById('list-subtitle');
-  subtitle.innerHTML = `${state.mangas.length} manga${state.mangas.length !== 1 ? 's' : ''} total` +
-    (filtered.length !== state.mangas.length ? ` &middot; <span style="color:var(--primary)">${filtered.length} shown</span>` : '');
+  if (subtitle) {
+    subtitle.innerHTML = `${state.mangas.length} manga${state.mangas.length !== 1 ? 's' : ''} total` +
+      (filtered.length !== state.mangas.length ? ` &middot; <span style="color:var(--primary)">${filtered.length} shown</span>` : '');
+  }
 
   // Pagination info
   const paginationInfo = document.getElementById('pagination-info');
@@ -904,101 +951,118 @@ function renderList() {
     }
   }
 
-  const activeFilterCount = [state.filters.search, state.filters.mangaStatus !== 'All', state.filters.myStatus !== 'All', state.filters.genres.length > 0].filter(Boolean).length;
+  const activeFilterCount = [
+    state.filters.search, 
+    state.filters.mangaStatus !== 'All', 
+    state.filters.myStatus !== 'All', 
+    state.filters.genres.length > 0
+  ].filter(Boolean).length;
+
   const badge = document.getElementById('filter-badge');
-  badge.textContent = activeFilterCount;
-  badge.classList.toggle('hidden', activeFilterCount === 0);
+  if (badge) {
+    badge.textContent = activeFilterCount;
+    badge.classList.toggle('hidden', activeFilterCount === 0);
+  }
 
   const grid = document.getElementById('manga-grid');
   const empty = document.getElementById('empty-state');
 
   if (filtered.length === 0) {
-    grid.classList.add('hidden');
-    empty.classList.remove('hidden');
+    if (grid) grid.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
     const hasFilters = activeFilterCount > 0;
-    document.getElementById('empty-title').textContent = hasFilters ? 'No manga matches your filters' : 'No manga yet';
-    document.getElementById('empty-desc').textContent = hasFilters ? 'Try adjusting your search or filters.' : 'Start building your collection by adding your first manga!';
+    const emptyTitle = document.getElementById('empty-title');
+    const emptyDesc = document.getElementById('empty-desc');
     const actionBtn = document.getElementById('empty-action');
-    if (hasFilters) {
-      actionBtn.textContent = 'Clear Filters';
-      actionBtn.href = '#list';
-      actionBtn.addEventListener('click', () => {
-        state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
-        state.listPage = 1;
-        document.getElementById('search-input').value = '';
-        document.getElementById('filter-manga-status').value = 'All';
-        document.getElementById('filter-my-status').value = 'All';
-        renderList();
-        renderAllGenrePills();
-      }, { once: true });
-    } else {
-      actionBtn.textContent = 'Add Your First Manga';
-      actionBtn.href = '#add';
+    if (emptyTitle) emptyTitle.textContent = hasFilters ? 'No manga matches your filters' : 'No manga yet';
+    if (emptyDesc) emptyDesc.textContent = hasFilters ? 'Try adjusting your search or filters.' : 'Start building your collection by adding your first manga!';
+    if (actionBtn) {
+      if (hasFilters) {
+        actionBtn.textContent = 'Clear Filters';
+        actionBtn.href = '#list';
+        actionBtn.onclick = () => {
+          state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
+          state.listPage = 1;
+          document.getElementById('search-input').value = '';
+          document.getElementById('filter-manga-status').value = 'All';
+          document.getElementById('filter-my-status').value = 'All';
+          renderList();
+          renderAllGenrePills();
+          return false;
+        };
+      } else {
+        actionBtn.textContent = 'Add Your First Manga';
+        actionBtn.href = '#add';
+        actionBtn.onclick = null;
+      }
     }
     renderPagination(0, 1, 'pagination-bottom');
     return;
   }
 
-  grid.classList.remove('hidden');
-  empty.classList.add('hidden');
+  if (grid) grid.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
 
-  grid.innerHTML = pageItems.map(manga => {
-    const statusClass = manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing';
-    const myStatusClass = manga.myStatus.startsWith('Completed') ? 'status-completed'
-      : manga.myStatus.startsWith('Dropped') ? 'status-dropped'
-      : manga.myStatus.startsWith('In Chapter') ? 'status-inchapter'
-      : 'status-default';
-    const rating = manga.rating || 0;
-    const year = manga.year ? `<div class="manga-year">${escapeHtml(manga.year)}</div>` : '';
-    const stars = [];
-    for (let i = 1; i <= 10; i++) {
-      stars.push(`<span class="star-display ${i <= rating ? '' : 'empty'}">${i <= rating ? '&#9733;' : '&#9734;'}</span>`);
-    }
-    return `
-      <div class="manga-card cute-card">
-        <div class="manga-cover-wrap">
-          ${manga.cover
-            ? `<img src="${manga.cover}" alt="${escapeHtml(manga.title)}" class="manga-cover">`
-            : `<div class="manga-cover-fallback"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></div>`}
-          <span class="manga-status-badge ${statusClass}">${manga.mangaStatus}</span>
-        </div>
-        <div class="manga-info">
-          <div class="manga-title" title="${escapeHtml(manga.title)}">${escapeHtml(manga.title)}</div>
-          ${year}
-          <div class="manga-rating">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
-          <div class="manga-genres">
-            ${manga.genre.slice(0, 3).map(g => `<span class="manga-genre-tag">${escapeHtml(g)}</span>`).join('')}
-            ${manga.genre.length > 3 ? `<span class="manga-genre-tag" style="background:var(--muted);color:var(--muted-fg)">+${manga.genre.length - 3}</span>` : ''}
-          </div>
-          <span class="manga-my-status ${myStatusClass}">${escapeHtml(truncateStatus(manga.myStatus))}</span>
-          <div class="manga-actions">
-            <a href="#detail/${manga.id}" class="btn btn-primary" style="font-size:0.75rem" data-link>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              View
-            </a>
-            <button class="btn btn-danger manga-delete" data-id="${manga.id}" style="font-size:0.75rem;flex:0 0 36px;padding:0.45rem 0">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-
-  grid.querySelectorAll('.manga-delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const manga = state.mangas.find(m => m.id === btn.dataset.id);
-      if (manga && confirm(`Delete "${manga.title}"?`)) {
-        state.mangas = state.mangas.filter(m => m.id !== btn.dataset.id);
-        await deleteMangaFromCloud(btn.dataset.id);
-        renderList();
+  if (grid) {
+    grid.innerHTML = pageItems.map(manga => {
+      const statusClass = manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing';
+      const myStatusClass = manga.myStatus && manga.myStatus.startsWith('Completed') ? 'status-completed'
+        : manga.myStatus && manga.myStatus.startsWith('Dropped') ? 'status-dropped'
+        : manga.myStatus && manga.myStatus.startsWith('In Chapter') ? 'status-inchapter'
+        : 'status-default';
+      const rating = manga.rating || 0;
+      const year = manga.year ? `<div class="manga-year">${escapeHtml(manga.year)}</div>` : '';
+      const stars = [];
+      for (let i = 1; i <= 10; i++) {
+        stars.push(`<span class="star-display ${i <= rating ? '' : 'empty'}">${i <= rating ? '&#9733;' : '&#9734;'}</span>`);
       }
+      return `
+        <div class="manga-card cute-card">
+          <div class="manga-cover-wrap">
+            ${manga.cover
+              ? `<img src="${manga.cover}" alt="${escapeHtml(manga.title)}" class="manga-cover">`
+              : `<div class="manga-cover-fallback"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></div>`}
+            <span class="manga-status-badge ${statusClass}">${manga.mangaStatus}</span>
+          </div>
+          <div class="manga-info">
+            <div class="manga-title" title="${escapeHtml(manga.title)}">${escapeHtml(manga.title)}</div>
+            ${year}
+            <div class="manga-rating">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
+            <div class="manga-genres">
+              ${manga.genre && manga.genre.slice(0, 3).map(g => `<span class="manga-genre-tag">${escapeHtml(g)}</span>`).join('')}
+              ${manga.genre && manga.genre.length > 3 ? `<span class="manga-genre-tag" style="background:var(--muted);color:var(--muted-fg)">+${manga.genre.length - 3}</span>` : ''}
+            </div>
+            <span class="manga-my-status ${myStatusClass}">${escapeHtml(truncateStatus(manga.myStatus))}</span>
+            <div class="manga-actions">
+              <a href="#detail/${manga.id}" class="btn btn-primary" style="font-size:0.75rem" data-link>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                View
+              </a>
+              <button class="btn btn-danger manga-delete" data-id="${manga.id}" style="font-size:0.75rem;flex:0 0 36px;padding:0.45rem 0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.manga-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const manga = state.mangas.find(m => m.id === btn.dataset.id);
+        if (manga && confirm(`Delete "${manga.title}"?`)) {
+          state.mangas = state.mangas.filter(m => m.id !== btn.dataset.id);
+          await deleteMangaFromCloud(btn.dataset.id);
+          renderList();
+        }
+      });
     });
-  });
+  }
 
   renderPagination(totalItems, currentPage, 'pagination-bottom');
 }
 
 function truncateStatus(status) {
+  if (!status) return '';
   if (status.length > 25) return status.slice(0, 22) + '...';
   return status;
 }
@@ -1007,53 +1071,84 @@ function truncateStatus(status) {
 let detailRatingControl = null;
 
 function setupDetailPage() {
-  document.getElementById('save-btn').addEventListener('click', saveEditing);
-  document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+  const saveBtn = document.getElementById('save-btn');
+  const cancelBtn = document.getElementById('cancel-edit-btn');
+
+  if (saveBtn) saveBtn.addEventListener('click', saveEditing);
+  if (cancelBtn) cancelBtn.addEventListener('click', () => {
     state.editMode = false; renderDetail();
   });
-  document.getElementById('detail-cover-input').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    state.detailEdit.cover = await fileToBase64(file);
-    const cover = document.getElementById('detail-cover');
-    cover.src = state.detailEdit.cover;
-    cover.classList.remove('hidden');
-    document.getElementById('detail-cover-fallback').classList.add('hidden');
-  });
-  document.getElementById('detail-toggle-genre-manager').addEventListener('click', () => {
-    document.getElementById('detail-genre-manager').classList.toggle('hidden');
-  });
-  document.getElementById('detail-add-genre-btn').addEventListener('click', () => {
-    const input = document.getElementById('detail-new-genre');
-    if (addGenre(input.value)) {
-      input.value = '';
-      renderDetailGenrePills();
-      renderDetailManagedGenres();
-    }
-  });
+
+  const detailCoverInput = document.getElementById('detail-cover-input');
+  if (detailCoverInput) {
+    detailCoverInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      state.detailEdit.cover = await fileToBase64(file);
+      const cover = document.getElementById('detail-cover');
+      cover.src = state.detailEdit.cover;
+      cover.classList.remove('hidden');
+      document.getElementById('detail-cover-fallback').classList.add('hidden');
+    });
+  }
+
+  const detailToggleGenre = document.getElementById('detail-toggle-genre-manager');
+  if (detailToggleGenre) {
+    detailToggleGenre.addEventListener('click', () => {
+      document.getElementById('detail-genre-manager').classList.toggle('hidden');
+    });
+  }
+
+  const detailAddGenreBtn = document.getElementById('detail-add-genre-btn');
+  if (detailAddGenreBtn) {
+    detailAddGenreBtn.addEventListener('click', () => {
+      const input = document.getElementById('detail-new-genre');
+      if (addGenre(input.value)) {
+        input.value = '';
+        renderDetailGenrePills();
+        renderDetailManagedGenres();
+      }
+    });
+  }
+
   document.querySelectorAll('#page-detail .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab('detail', btn.dataset.detailTab));
   });
-  document.getElementById('detail-add-chapter-btn').addEventListener('click', () => {
-    const num = document.getElementById('detail-chapter-num').value.trim();
-    const reason = document.getElementById('detail-chapter-reason').value.trim();
-    if (!num || !reason) return;
-    state.detailEdit.chapters.push({ number: parseInt(num), reason });
-    document.getElementById('detail-chapter-num').value = '';
-    document.getElementById('detail-chapter-reason').value = '';
-    renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
-    updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
-  });
-  document.getElementById('detail-photo-upload').addEventListener('click', () => {
-    document.getElementById('detail-photo-input').click();
-  });
-  document.getElementById('detail-photo-input').addEventListener('change', async (e) => {
-    const files = Array.from(e.target.files);
-    const dataUrls = await Promise.all(files.map(fileToBase64));
-    state.detailEdit.photos.push(...dataUrls);
-    renderPhotos('detail-photo-grid', state.detailEdit.photos, true);
-    updateTabCount('detail-tab-count-photos', state.detailEdit.photos.length);
-  });
+
+  const detailAddChapter = document.getElementById('detail-add-chapter-btn');
+  if (detailAddChapter) {
+    detailAddChapter.addEventListener('click', () => {
+      const num = document.getElementById('detail-chapter-num').value.trim();
+      const reason = document.getElementById('detail-chapter-reason').value.trim();
+      if (!num || !reason) return;
+      state.detailEdit.chapters.push({ number: parseInt(num), reason });
+      document.getElementById('detail-chapter-num').value = '';
+      document.getElementById('detail-chapter-reason').value = '';
+      renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
+      updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
+    });
+  }
+
+  const detailPhotoUpload = document.getElementById('detail-photo-upload');
+  const detailPhotoInput = document.getElementById('detail-photo-input');
+
+  if (detailPhotoUpload) {
+    detailPhotoUpload.addEventListener('click', () => {
+      detailPhotoInput.click();
+    });
+  }
+
+  if (detailPhotoInput) {
+    detailPhotoInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+      const dataUrls = await Promise.all(files.map(fileToBase64));
+      state.detailEdit.photos.push(...dataUrls);
+      renderPhotos('detail-photo-grid', state.detailEdit.photos, true);
+      updateTabCount('detail-tab-count-photos', state.detailEdit.photos.length);
+      detailPhotoInput.value = '';
+    });
+  }
 }
 
 function renderDetail() {
@@ -1063,69 +1158,118 @@ function renderDetail() {
   const coverEl = document.getElementById('detail-cover');
   const fallbackEl = document.getElementById('detail-cover-fallback');
   if (manga.cover) {
-    coverEl.src = manga.cover; coverEl.classList.remove('hidden'); fallbackEl.classList.add('hidden');
+    if (coverEl) { coverEl.src = manga.cover; coverEl.classList.remove('hidden'); }
+    if (fallbackEl) fallbackEl.classList.add('hidden');
   } else {
-    coverEl.src = ''; coverEl.classList.add('hidden'); fallbackEl.classList.remove('hidden');
+    if (coverEl) { coverEl.src = ''; coverEl.classList.add('hidden'); }
+    if (fallbackEl) fallbackEl.classList.remove('hidden');
   }
-  document.getElementById('cover-change-overlay').classList.toggle('hidden', !state.editMode);
-  document.getElementById('detail-readonly').classList.toggle('hidden', state.editMode);
-  document.getElementById('detail-edit').classList.toggle('hidden', !state.editMode);
+
+  const coverOverlay = document.getElementById('cover-change-overlay');
+  if (coverOverlay) coverOverlay.classList.toggle('hidden', !state.editMode);
+
+  const readonlyEl = document.getElementById('detail-readonly');
+  const editEl = document.getElementById('detail-edit');
+  if (readonlyEl) readonlyEl.classList.toggle('hidden', state.editMode);
+  if (editEl) editEl.classList.toggle('hidden', !state.editMode);
 
   const actionsEl = document.getElementById('detail-actions');
-  actionsEl.innerHTML = state.editMode
-    ? `<button class="btn btn-danger" id="detail-cancel-btn">&#10005; Cancel</button>`
-    : `<button class="btn btn-danger" id="detail-delete-btn">&#128465; Delete</button>
-       <button class="btn btn-edit" id="detail-edit-btn">&#9998; Edit</button>`;
+  if (actionsEl) {
+    actionsEl.innerHTML = state.editMode
+      ? `<button class="btn btn-danger" id="detail-cancel-btn">&#10005; Cancel</button>`
+      : `<button class="btn btn-danger" id="detail-delete-btn">&#128465; Delete</button>
+         <button class="btn btn-edit" id="detail-edit-btn">&#9998; Edit</button>`;
+  }
 
   if (state.editMode) {
-    document.getElementById('detail-cancel-btn').addEventListener('click', () => {
-      state.editMode = false; renderDetail();
-    });
+    const cancelBtn = document.getElementById('detail-cancel-btn');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        state.editMode = false; renderDetail();
+      });
+    }
   } else {
-    document.getElementById('detail-edit-btn').addEventListener('click', startEditing);
-    document.getElementById('detail-delete-btn').addEventListener('click', async () => {
-      if (confirm(`Delete "${manga.title}"? This cannot be undone.`)) {
-        state.mangas = state.mangas.filter(m => m.id !== state.selectedMangaId);
-        await deleteMangaFromCloud(state.selectedMangaId);
-        navigate('list');
-      }
-    });
+    const editBtn = document.getElementById('detail-edit-btn');
+    const deleteBtn = document.getElementById('detail-delete-btn');
+    if (editBtn) editBtn.addEventListener('click', startEditing);
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async () => {
+        if (confirm(`Delete "${manga.title}"? This cannot be undone.`)) {
+          state.mangas = state.mangas.filter(m => m.id !== state.selectedMangaId);
+          await deleteMangaFromCloud(state.selectedMangaId);
+          navigate('list');
+        }
+      });
+    }
   }
 
   if (!state.editMode) {
-    document.getElementById('detail-view-title').textContent = manga.title;
+    const titleEl = document.getElementById('detail-view-title');
+    if (titleEl) titleEl.textContent = manga.title;
+
     const otherEl = document.getElementById('detail-view-other');
-    if (manga.otherTitles) { otherEl.textContent = manga.otherTitles; otherEl.style.display = 'block'; }
-    else { otherEl.style.display = 'none'; }
-    const myClass = manga.myStatus.startsWith('Completed') ? 'my-completed'
-      : manga.myStatus.startsWith('Dropped') ? 'my-dropped'
-      : manga.myStatus.startsWith('In Chapter') ? 'my-inchapter' : 'my-default';
-    document.getElementById('detail-view-badges').innerHTML = `
-      <span class="detail-badge ${manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing'}">${manga.mangaStatus}</span>
-      <span class="detail-badge ${myClass}">${manga.myStatus}</span>`;
+    if (otherEl) {
+      if (manga.otherTitles) { otherEl.textContent = manga.otherTitles; otherEl.style.display = 'block'; }
+      else { otherEl.style.display = 'none'; }
+    }
+
+    const myClass = manga.myStatus && manga.myStatus.startsWith('Completed') ? 'my-completed'
+      : manga.myStatus && manga.myStatus.startsWith('Dropped') ? 'my-dropped'
+      : manga.myStatus && manga.myStatus.startsWith('In Chapter') ? 'my-inchapter' : 'my-default';
+
+    const badgesEl = document.getElementById('detail-view-badges');
+    if (badgesEl) {
+      badgesEl.innerHTML = `
+        <span class="detail-badge ${manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing'}">${manga.mangaStatus}</span>
+        <span class="detail-badge ${myClass}">${manga.myStatus}</span>`;
+    }
 
     // Rating display
     const ratingEl = document.getElementById('detail-view-rating');
     renderStarDisplay(ratingEl, manga.rating || 0, 'large');
 
-    document.getElementById('detail-view-genres').innerHTML =
-      manga.genre.map(g => `<span class="detail-genre-tag">${escapeHtml(g)}</span>`).join('');
-    const summaryEl = document.getElementById('detail-view-summary');
-    if (manga.summary) { summaryEl.innerHTML = `<p>${escapeHtml(manga.summary)}</p>`; summaryEl.style.display = 'block'; }
-    else { summaryEl.style.display = 'none'; }
-
     // Year display
     const infoEl = document.getElementById('detail-view-badges');
-    if (manga.year) {
-      infoEl.insertAdjacentHTML('afterend', `<div class="detail-year">Year: ${escapeHtml(manga.year)}</div>`);
+    if (infoEl && manga.year) {
+      // Check if year element already exists
+      let yearEl = document.getElementById('detail-year-display');
+      if (!yearEl) {
+        yearEl = document.createElement('div');
+        yearEl.id = 'detail-year-display';
+        yearEl.className = 'detail-year';
+        infoEl.after(yearEl);
+      }
+      yearEl.textContent = `Year: ${escapeHtml(manga.year)}`;
+      yearEl.style.display = 'block';
+    } else {
+      const existingYear = document.getElementById('detail-year-display');
+      if (existingYear) existingYear.style.display = 'none';
+    }
+
+    const genresEl = document.getElementById('detail-view-genres');
+    if (genresEl) {
+      genresEl.innerHTML = manga.genre && manga.genre.map(g => `<span class="detail-genre-tag">${escapeHtml(g)}</span>`).join('');
+    }
+
+    const summaryEl = document.getElementById('detail-view-summary');
+    if (summaryEl) {
+      if (manga.summary) { summaryEl.innerHTML = `<p>${escapeHtml(manga.summary)}</p>`; summaryEl.style.display = 'block'; }
+      else { summaryEl.style.display = 'none'; }
     }
   } else {
-    document.getElementById('detail-edit-title').value = state.detailEdit.title;
-    document.getElementById('detail-edit-other').value = state.detailEdit.otherTitles;
-    document.getElementById('detail-edit-manga-status').value = state.detailEdit.mangaStatus;
-    document.getElementById('detail-edit-my-status').value = state.detailEdit.myStatus;
-    document.getElementById('detail-edit-summary').value = state.detailEdit.summary;
-    document.getElementById('detail-edit-year').value = state.detailEdit.year || '';
+    const editTitle = document.getElementById('detail-edit-title');
+    const editOther = document.getElementById('detail-edit-other');
+    const editMangaStatus = document.getElementById('detail-edit-manga-status');
+    const editMyStatus = document.getElementById('detail-edit-my-status');
+    const editSummary = document.getElementById('detail-edit-summary');
+    const editYear = document.getElementById('detail-edit-year');
+
+    if (editTitle) editTitle.value = state.detailEdit.title;
+    if (editOther) editOther.value = state.detailEdit.otherTitles;
+    if (editMangaStatus) editMangaStatus.value = state.detailEdit.mangaStatus;
+    if (editMyStatus) editMyStatus.value = state.detailEdit.myStatus;
+    if (editSummary) editSummary.value = state.detailEdit.summary;
+    if (editYear) editYear.value = state.detailEdit.year || '';
 
     // Setup star rating for edit
     if (!detailRatingControl) {
@@ -1140,8 +1284,10 @@ function renderDetail() {
     renderDetailManagedGenres();
   }
 
-  document.getElementById('detail-chapter-edit-row').classList.toggle('hidden', !state.editMode);
-  document.getElementById('detail-photo-upload').classList.toggle('hidden', !state.editMode);
+  const chapterEditRow = document.getElementById('detail-chapter-edit-row');
+  const photoUpload = document.getElementById('detail-photo-upload');
+  if (chapterEditRow) chapterEditRow.classList.toggle('hidden', !state.editMode);
+  if (photoUpload) photoUpload.classList.toggle('hidden', !state.editMode);
 
   const chapters = state.editMode ? state.detailEdit.chapters : manga.favoriteChapters;
   const photos = state.editMode ? state.detailEdit.photos : manga.favoritePhotos;
@@ -1157,13 +1303,17 @@ function startEditing() {
   if (!manga) return;
   state.editMode = true;
   state.detailEdit = {
-    title: manga.title, otherTitles: manga.otherTitles,
-    mangaStatus: manga.mangaStatus, myStatus: manga.myStatus,
-    summary: manga.summary, cover: manga.cover,
-    rating: manga.rating || 0, year: manga.year || '',
-    chapters: [...manga.favoriteChapters],
-    photos: [...manga.favoritePhotos],
-    selectedGenres: [...manga.genre],
+    title: manga.title, 
+    otherTitles: manga.otherTitles || '',
+    mangaStatus: manga.mangaStatus, 
+    myStatus: manga.myStatus,
+    summary: manga.summary || '', 
+    cover: manga.cover || '',
+    rating: manga.rating || 0, 
+    year: manga.year || '',
+    chapters: [...(manga.favoriteChapters || [])],
+    photos: [...(manga.favoritePhotos || [])],
+    selectedGenres: [...(manga.genre || [])],
   };
   renderDetail();
 }
@@ -1171,14 +1321,22 @@ function startEditing() {
 async function saveEditing() {
   const manga = state.mangas.find(m => m.id === state.selectedMangaId);
   if (!manga) return;
-  manga.title = document.getElementById('detail-edit-title').value.trim();
-  manga.otherTitles = document.getElementById('detail-edit-other').value.trim();
-  manga.mangaStatus = document.getElementById('detail-edit-manga-status').value;
-  manga.myStatus = document.getElementById('detail-edit-my-status').value.trim();
-  manga.summary = document.getElementById('detail-edit-summary').value.trim();
+
+  const editTitle = document.getElementById('detail-edit-title');
+  const editOther = document.getElementById('detail-edit-other');
+  const editMangaStatus = document.getElementById('detail-edit-manga-status');
+  const editMyStatus = document.getElementById('detail-edit-my-status');
+  const editSummary = document.getElementById('detail-edit-summary');
+  const editYear = document.getElementById('detail-edit-year');
+
+  manga.title = editTitle ? editTitle.value.trim() : manga.title;
+  manga.otherTitles = editOther ? editOther.value.trim() : manga.otherTitles;
+  manga.mangaStatus = editMangaStatus ? editMangaStatus.value : manga.mangaStatus;
+  manga.myStatus = editMyStatus ? editMyStatus.value.trim() : manga.myStatus;
+  manga.summary = editSummary ? editSummary.value.trim() : manga.summary;
   manga.cover = state.detailEdit.cover;
   manga.rating = state.detailEdit.rating || 0;
-  manga.year = document.getElementById('detail-edit-year').value.trim();
+  manga.year = editYear ? editYear.value.trim() : manga.year;
   manga.favoriteChapters = [...state.detailEdit.chapters];
   manga.favoritePhotos = [...state.detailEdit.photos];
   manga.genre = [...state.detailEdit.selectedGenres];
