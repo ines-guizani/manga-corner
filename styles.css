@@ -1183,3 +1183,240 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   border-radius: 0.75rem;
 }
 .comment-bubble p { font-size: 0.875rem; flex: 1; }
+
+/* ===== STAR RATING ===== */
+.star-rating-input {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 1.5rem;
+}
+.star-rating-input .star {
+  cursor: pointer;
+  color: var(--border);
+  transition: color 0.15s, transform 0.15s;
+  user-select: none;
+}
+.star-rating-input .star:hover,
+.star-rating-input .star.active {
+  color: #f5c89a;
+  transform: scale(1.15);
+}
+.star-rating-input .star.half {
+  position: relative;
+}
+.rating-value {
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 1.5rem;
+}
+
+/* Rating display in cards */
+.manga-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.5rem;
+}
+.manga-rating .star-display {
+  font-size: 0.75rem;
+  color: #f5c89a;
+}
+.manga-rating .star-display.empty {
+  color: var(--border);
+}
+.manga-rating .rating-number {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted-fg);
+  margin-left: 0.2rem;
+}
+
+/* Detail rating */
+.detail-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+.detail-rating .star-display {
+  font-size: 1.1rem;
+  color: #f5c89a;
+}
+.detail-rating .star-display.empty {
+  color: var(--border);
+}
+.detail-rating .rating-number {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-left: 0.3rem;
+}
+
+/* ===== PAGINATION ===== */
+.list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.sort-control {
+  display: flex;
+  flex-direction: column;
+}
+.pagination-info {
+  font-size: 0.8125rem;
+  color: var(--muted-fg);
+  font-weight: 600;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.page-btn:hover {
+  background: var(--secondary);
+  border-color: var(--primary);
+}
+.page-btn.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-btn.dots {
+  border: none;
+  background: none;
+  cursor: default;
+}
+.page-btn.dots:hover {
+  background: none;
+  border-color: transparent;
+}
+
+/* ===== LIGHTBOX ===== */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox.hidden {
+  display: none !important;
+}
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+}
+.lightbox-content {
+  position: relative;
+  z-index: 1;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lightbox-content img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+.lightbox-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.15);
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.lightbox-close:hover {
+  background: rgba(255,255,255,0.3);
+}
+.lightbox-nav {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  padding: 0 1rem;
+}
+.lightbox-nav button {
+  pointer-events: all;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.15);
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-nav button:hover {
+  background: rgba(255,255,255,0.3);
+}
+.lightbox-counter {
+  margin-top: 0.75rem;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Year display */
+.manga-year {
+  font-size: 0.65rem;
+  color: var(--muted-fg);
+  margin-bottom: 0.35rem;
+}
+.detail-year {
+  font-size: 0.8125rem;
+  color: var(--muted-fg);
+  margin-bottom: 0.5rem;
+}
