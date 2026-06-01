@@ -1,5 +1,6 @@
 /**
- * The Manga Corner — Firebase Cloud Sync + Google Auth Version
+ * The Manga Corner — Firebase Cloud Sync Version
+ * Data is saved to Firestore and syncs across all your devices automatically!
  */
 
 // ===== FIREBASE SETUP =====
@@ -8,12 +9,7 @@ import {
   getFirestore, collection, doc,
   getDocs, setDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-// ===== YOUR FIREBASE CONFIG =====
-// ⚠️ This key is restricted to ines-guizani.github.io only — safe to leave here
 const firebaseConfig = {
   apiKey: "AIzaSyA4AqPDWurGDj321-B8DKQRuGtQfl8QULc",
   authDomain: "manga-corner-b0af9.firebaseapp.com",
@@ -23,16 +19,12 @@ const firebaseConfig = {
   appId: "1:493110609888:web:c94b163c51dce675758d85"
 };
 
-// ===== YOUR GOOGLE ACCOUNT EMAIL =====
-// Only this email can access the app
-const OWNER_EMAIL = "inesguizani348@gmail.com";
-
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
-const auth = getAuth(firebaseApp);
-const provider = new GoogleAuthProvider();
 
+// Firestore collection references
 const MANGAS_COL = collection(db, "mangas");
+const GENRES_COL = collection(db, "genres");
 
 // ===== CONFIG =====
 const DEFAULT_GENRES = [
@@ -40,6 +32,8 @@ const DEFAULT_GENRES = [
   'Horror', 'Isekai', 'Mystery', 'Romance', 'Sci-Fi',
   'Slice of Life', 'Sports', 'Supernatural', 'Thriller'
 ];
+
+// Theme still lives in localStorage (device preference, not shared)
 const THEME_KEY = 'mangaCorner_theme';
 
 // ===== STATE =====
@@ -49,125 +43,69 @@ let state = {
   currentPage: 'home',
   selectedMangaId: null,
   editMode: false,
-  addForm: { chapters: [], photos: [], comments: [], cover: '', selectedGenres: [] },
-  detailEdit: { chapters: [], photos: [], comments: [], cover: '', selectedGenres: [] },
-  filters: { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] },
+  addForm: {
+    chapters: [],
+    photos: [],
+    comments: [],
+    cover: '',
+    selectedGenres: [],
+  },
+  detailEdit: {
+    chapters: [],
+    photos: [],
+    comments: [],
+    cover: '',
+    selectedGenres: [],
+  },
+  filters: {
+    search: '',
+    mangaStatus: 'All',
+    myStatus: 'All',
+    genres: [],
+  },
   showFilters: false,
   showGenreManager: false,
-  currentUser: null,
+  syncing: false,
 };
 
-// ===== AUTH =====
-function setupAuth() {
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      // Someone is logged in — check it's YOU
-      if (user.email !== OWNER_EMAIL) {
-        signOut(auth);
-        showLoginScreen("⛔ Access denied. This app is private.");
-        return;
-      }
-      // It's you! Hide login, show app
-      state.currentUser = user;
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app-wrapper').style.display = 'block';
-      document.getElementById('user-avatar').src = user.photoURL || '';
-      document.getElementById('user-avatar').style.display = 'block';
-      document.getElementById('user-name').textContent = user.displayName || user.email;
-      loadAppData();
-    } else {
-      // No one logged in — show login screen
-      state.currentUser = null;
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('app-wrapper').style.display = 'none';
-      showLoadingScreen(false);
-    }
-  });
+// ===== CLOUD SAVE / LOAD =====
 
-  document.getElementById('google-signin-btn').addEventListener('click', async () => {
-    try {
-      document.getElementById('signin-error').style.display = 'none';
-      await signInWithPopup(auth, provider);
-    } catch (e) {
-      document.getElementById('signin-error').textContent = 'Sign-in failed: ' + e.message;
-      document.getElementById('signin-error').style.display = 'block';
-    }
-  });
-
-  document.getElementById('signout-btn').addEventListener('click', async () => {
-    await signOut(auth);
-  });
-}
-
-function showLoginScreen(errorMsg = '') {
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('app-wrapper').style.display = 'none';
-  if (errorMsg) {
-    document.getElementById('signin-error').textContent = errorMsg;
-    document.getElementById('signin-error').style.display = 'block';
-  }
-}
-
-// ===== LOAD APP DATA (called after successful login) =====
-async function loadAppData() {
-  showLoadingScreen(true);
-  try {
-    const [cloudMangas, cloudGenres] = await Promise.all([
-      loadMangasFromCloud(),
-      loadGenresFromCloud()
-    ]);
-    state.mangas = cloudMangas;
-    if (cloudGenres && cloudGenres.length > 0) {
-      state.genres = cloudGenres;
-    } else {
-      state.genres = [...DEFAULT_GENRES];
-      await saveGenresToCloud(state.genres);
-    }
-    await migrateLocalStorageToCloud();
-  } catch (e) {
-    console.error("Cloud load failed:", e);
-    state.mangas = loadFromStorage('mangas_v2', []);
-    state.genres = loadFromStorage('genres_v2', [...DEFAULT_GENRES]);
-    showSyncError();
-  }
-  showLoadingScreen(false);
-  setupNavigation();
-  setupThemeToggle();
-  setupMobileMenu();
-  setupAddPage();
-  setupListPage();
-  setupDetailPage();
-  handleRoute();
-  setupRealtimeSync();
-}
-
-// ===== CLOUD FUNCTIONS =====
+// Save a single manga document to Firestore
 async function saveMangaToCloud(manga) {
   try {
-    showSyncing();
     await setDoc(doc(db, "mangas", manga.id), manga);
-    showSynced();
-  } catch (e) { console.error("Save failed:", e); showSyncError(); }
+  } catch (e) {
+    console.error("Failed to save manga:", e);
+    showSyncError();
+  }
 }
 
+// Delete a single manga document from Firestore
 async function deleteMangaFromCloud(id) {
   try {
-    showSyncing();
     await deleteDoc(doc(db, "mangas", id));
-    showSynced();
-  } catch (e) { console.error("Delete failed:", e); showSyncError(); }
+  } catch (e) {
+    console.error("Failed to delete manga:", e);
+    showSyncError();
+  }
 }
 
+// Save genres list to Firestore (stored as a single doc)
 async function saveGenresToCloud(genres) {
-  try { await setDoc(doc(db, "genres", "list"), { genres }); }
-  catch (e) { console.error("Genres save failed:", e); }
+  try {
+    await setDoc(doc(db, "genres", "list"), { genres });
+  } catch (e) {
+    console.error("Failed to save genres:", e);
+  }
 }
 
+// Load all mangas from Firestore
 async function loadMangasFromCloud() {
   const snapshot = await getDocs(MANGAS_COL);
   return snapshot.docs.map(d => d.data());
 }
 
+// Load genres from Firestore
 async function loadGenresFromCloud() {
   const snapshot = await getDocs(collection(db, "genres"));
   if (snapshot.empty) return null;
@@ -175,23 +113,74 @@ async function loadGenresFromCloud() {
   return docData ? docData.data().genres : null;
 }
 
-// ===== SYNC STATUS =====
+// ===== SYNC STATUS UI =====
 function showSyncing() {
   const el = document.getElementById('sync-status');
   if (el) { el.textContent = '☁️ Saving...'; el.className = 'sync-status syncing'; el.style.display = 'flex'; }
 }
 function showSynced() {
   const el = document.getElementById('sync-status');
-  if (el) {
-    el.textContent = '✓ Saved to cloud';
-    el.className = 'sync-status synced';
-    el.style.display = 'flex';
-    setTimeout(() => { el.style.display = 'none'; }, 2500);
-  }
+  if (el) { el.textContent = '✓ Saved'; el.className = 'sync-status synced'; el.style.display = 'flex';
+    setTimeout(() => { el.style.display = 'none'; }, 2000); }
 }
 function showSyncError() {
   const el = document.getElementById('sync-status');
-  if (el) { el.textContent = '⚠️ Sync error — check connection'; el.className = 'sync-status error'; el.style.display = 'flex'; }
+  if (el) { el.textContent = '⚠️ Sync error'; el.className = 'sync-status error'; el.style.display = 'flex'; }
+}
+
+// ===== INITIALIZATION =====
+async function init() {
+  // Apply theme first (instant, no network needed)
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+
+  // Show loading indicator
+  showLoadingScreen(true);
+
+  try {
+    // Load data from cloud
+    const [cloudMangas, cloudGenres] = await Promise.all([
+      loadMangasFromCloud(),
+      loadGenresFromCloud()
+    ]);
+
+    state.mangas = cloudMangas;
+
+    if (cloudGenres && cloudGenres.length > 0) {
+      state.genres = cloudGenres;
+    } else {
+      // First time: seed default genres to cloud
+      state.genres = [...DEFAULT_GENRES];
+      await saveGenresToCloud(state.genres);
+    }
+
+    // Migrate any old localStorage data to cloud (one-time migration)
+    await migrateLocalStorageToCloud();
+
+  } catch (e) {
+    console.error("Cloud load failed, falling back to localStorage:", e);
+    // Fallback to localStorage if offline
+    state.mangas = loadFromStorage('mangas_v2', []);
+    state.genres = loadFromStorage('genres_v2', DEFAULT_GENRES);
+  }
+
+  showLoadingScreen(false);
+
+  // Setup all event listeners
+  setupNavigation();
+  setupThemeToggle();
+  setupMobileMenu();
+  setupAddPage();
+  setupListPage();
+  setupDetailPage();
+
+  // Handle initial route
+  handleRoute();
+
+  // Listen for real-time updates from other devices
+  setupRealtimeSync();
 }
 
 function showLoadingScreen(show) {
@@ -199,37 +188,46 @@ function showLoadingScreen(show) {
   if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-// ===== MIGRATION =====
+// ===== ONE-TIME MIGRATION FROM LOCALSTORAGE =====
 async function migrateLocalStorageToCloud() {
-  if (localStorage.getItem('mangaCorner_migrated_to_cloud')) return;
+  const migrated = localStorage.getItem('mangaCorner_migrated_to_cloud');
+  if (migrated) return; // Already done
+
   const oldMangas = loadFromStorage('mangas_v2', null) || loadFromStorage('mangas', null);
   if (oldMangas && oldMangas.length > 0 && state.mangas.length === 0) {
+    console.log(`Migrating ${oldMangas.length} manga from localStorage to cloud...`);
     for (const manga of oldMangas) {
+      // Ensure manga has all required fields
       const clean = {
         id: manga.id || `migrated_${Date.now()}_${Math.random().toString(36).slice(2,9)}`,
         title: manga.title || '',
         otherTitles: manga.otherTitles || '',
         genre: manga.genre || [],
         mangaStatus: manga.mangaStatus || 'Ongoing',
-        myStatus: manga.myStatus || "Didn't start yet",
+        myStatus: manga.myStatus || manga.status || "Didn't start yet",
         summary: manga.summary || '',
         cover: manga.cover || '',
-        favoriteChapters: manga.favoriteChapters || [],
-        favoritePhotos: manga.favoritePhotos || [],
+        favoriteChapters: manga.favoriteChapters || manga.chapters || [],
+        favoritePhotos: manga.favoritePhotos || manga.photos || [],
         comments: manga.comments || [],
         createdAt: manga.createdAt || new Date().toISOString(),
       };
-      await setDoc(doc(db, "mangas", clean.id), clean);
+      await saveMangaToCloud(clean);
       state.mangas.push(clean);
     }
+    localStorage.setItem('mangaCorner_migrated_to_cloud', 'true');
+    console.log('Migration complete!');
+  } else {
+    localStorage.setItem('mangaCorner_migrated_to_cloud', 'true');
   }
-  localStorage.setItem('mangaCorner_migrated_to_cloud', 'true');
 }
 
-// ===== REAL-TIME SYNC =====
+// ===== REAL-TIME SYNC (updates when another device saves) =====
 function setupRealtimeSync() {
   onSnapshot(MANGAS_COL, (snapshot) => {
+    // Only update if change came from another device (not our own save)
     const incoming = snapshot.docs.map(d => d.data());
+    // Simple check: if count differs or we're on home/list page, refresh
     if (incoming.length !== state.mangas.length) {
       state.mangas = incoming;
       if (state.currentPage === 'home') renderHome();
@@ -238,13 +236,19 @@ function setupRealtimeSync() {
   });
 }
 
-// ===== LOCALSTORAGE FALLBACK =====
+// ===== STORAGE HELPERS (kept for fallback/theme) =====
 function loadFromStorage(key, fallback = null) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
 }
 
-// ===== NAVIGATION =====
+// ===== SAVE FUNCTIONS (now go to cloud) =====
+async function saveMangas() {
+  // This is called after any change to state.mangas
+  // Individual operations (add/edit/delete) call specific cloud functions
+}
+
+// ===== ROUTER =====
 function setupNavigation() {
   document.addEventListener('click', (e) => {
     const link = e.target.closest('a[data-link]');
@@ -271,7 +275,9 @@ function handleRoute() {
 
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-link, .mobile-link').forEach(l => l.classList.remove('active'));
-  document.querySelectorAll(`a[href="#${page}"]`).forEach(l => l.classList.add('active'));
+
+  const activeLinks = document.querySelectorAll(`a[href="#${page}"]`);
+  activeLinks.forEach(l => l.classList.add('active'));
 
   state.currentPage = page;
   state.editMode = false;
@@ -279,18 +285,23 @@ function handleRoute() {
   switch (page) {
     case 'home':
       document.getElementById('page-home').classList.remove('hidden');
-      renderHome(); break;
+      renderHome();
+      break;
     case 'add':
       document.getElementById('page-add').classList.remove('hidden');
-      resetAddForm(); break;
+      resetAddForm();
+      break;
     case 'list':
       document.getElementById('page-list').classList.remove('hidden');
-      renderList(); break;
+      renderList();
+      break;
     case 'detail':
       state.selectedMangaId = parts[1];
       document.getElementById('page-detail').classList.remove('hidden');
-      renderDetail(); break;
-    default: navigate('home');
+      renderDetail();
+      break;
+    default:
+      navigate('home');
   }
 
   document.getElementById('mobile-menu').classList.remove('open');
@@ -299,10 +310,6 @@ function handleRoute() {
 
 // ===== THEME =====
 function setupThemeToggle() {
-  const savedTheme = localStorage.getItem(THEME_KEY);
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  }
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     if (isDark) {
@@ -325,7 +332,7 @@ function setupMobileMenu() {
   });
 }
 
-// ===== HOME =====
+// ===== HOME PAGE =====
 function renderHome() {
   const count = state.mangas.length;
   const countEl = document.getElementById('hero-count');
@@ -337,32 +344,23 @@ function renderHome() {
   }
 }
 
-// ===== GENRES =====
-function renderGenrePills(containerId, selectedGenres, onToggle) {
+// ===== GENRE PILLS (shared) =====
+function renderGenrePills(containerId, selectedGenres, onToggle, managed = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
   state.genres.forEach(genre => {
     const pill = document.createElement('button');
     pill.type = 'button';
-    pill.className = `genre-pill ${selectedGenres.includes(genre) ? 'active' : ''}`;
-    pill.textContent = genre;
-    pill.addEventListener('click', () => onToggle(genre));
-    container.appendChild(pill);
-  });
-}
-
-function renderManagedGenres(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = '';
-  state.genres.forEach(genre => {
-    const pill = document.createElement('span');
-    pill.className = 'genre-pill managed';
-    pill.innerHTML = `${genre} <span class="remove">&times;</span>`;
-    pill.querySelector('.remove').addEventListener('click', () => {
-      deleteGenre(genre);
-      renderAllGenrePills();
+    pill.className = `genre-pill ${selectedGenres.includes(genre) ? 'active' : ''} ${managed ? 'managed' : ''}`;
+    pill.innerHTML = `${genre}${managed ? '<span class="remove">&times;</span>' : ''}`;
+    pill.addEventListener('click', (e) => {
+      if (managed && e.target.classList.contains('remove')) {
+        deleteGenre(genre);
+        renderAllGenrePills();
+      } else {
+        onToggle(genre);
+      }
     });
     container.appendChild(pill);
   });
@@ -385,6 +383,24 @@ function renderAllGenrePills() {
   }
 }
 
+function renderManagedGenres(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  state.genres.forEach(genre => {
+    const pill = document.createElement('span');
+    pill.className = 'genre-pill managed';
+    pill.innerHTML = `${genre} <span class="remove">&times;</span>`;
+    pill.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove')) {
+        deleteGenre(genre);
+        renderAllGenrePills();
+      }
+    });
+    container.appendChild(pill);
+  });
+}
+
 function toggleArray(arr, item) {
   const idx = arr.indexOf(item);
   if (idx > -1) arr.splice(idx, 1); else arr.push(item);
@@ -396,7 +412,10 @@ function addGenre(name) {
   const genres = trimmed.split(',').map(g => g.trim()).filter(g => g);
   let added = false;
   genres.forEach(g => {
-    if (!state.genres.includes(g)) { state.genres.push(g); added = true; }
+    if (!state.genres.includes(g)) {
+      state.genres.push(g);
+      added = true;
+    }
   });
   if (added) saveGenresToCloud(state.genres);
   return added;
@@ -406,10 +425,8 @@ function deleteGenre(genre) {
   if (!confirm(`Delete genre "${genre}"?`)) return;
   state.genres = state.genres.filter(g => g !== genre);
   saveGenresToCloud(state.genres);
-  state.mangas.forEach(m => {
-    m.genre = m.genre.filter(g => g !== genre);
-    saveMangaToCloud(m);
-  });
+  state.mangas.forEach(m => { m.genre = m.genre.filter(g => g !== genre); });
+  state.mangas.forEach(m => saveMangaToCloud(m));
   state.addForm.selectedGenres = state.addForm.selectedGenres.filter(g => g !== genre);
   state.filters.genres = state.filters.genres.filter(g => g !== genre);
   state.detailEdit.selectedGenres = state.detailEdit.selectedGenres.filter(g => g !== genre);
@@ -424,7 +441,7 @@ function fileToBase64(file) {
   });
 }
 
-// ===== ADD PAGE =====
+// ===== ADD MANGA PAGE =====
 function setupAddPage() {
   const coverBox = document.getElementById('cover-box');
   const coverInput = document.getElementById('cover-input');
@@ -460,7 +477,10 @@ function setupAddPage() {
 
   document.getElementById('add-genre-btn').addEventListener('click', () => {
     const input = document.getElementById('new-genre');
-    if (addGenre(input.value)) { input.value = ''; renderAllGenrePills(); }
+    if (addGenre(input.value)) {
+      input.value = '';
+      renderAllGenrePills();
+    }
   });
 
   const myStatus = document.getElementById('my-status');
@@ -509,8 +529,8 @@ function setupAddPage() {
     const title = document.getElementById('title').value.trim();
     if (!title) { alert('Please enter a title!'); return; }
 
-    const myStatusEl = document.getElementById('my-status');
-    let myStatusVal = myStatusEl.value;
+    const myStatus = document.getElementById('my-status');
+    let myStatusVal = myStatus.value;
     if (myStatusVal === 'Dropped') {
       const chap = document.getElementById('dropped-chapter').value.trim();
       if (chap) myStatusVal = `Dropped (at chapter ${chap})`;
@@ -534,9 +554,12 @@ function setupAddPage() {
       createdAt: new Date().toISOString(),
     };
 
+    showSyncing();
     state.mangas.push(manga);
     await saveMangaToCloud(manga);
-    alert('Manga saved to cloud! ☁️');
+    showSynced();
+
+    alert('Manga saved successfully! ☁️');
     navigate('list');
   });
 }
@@ -563,13 +586,15 @@ function resetAddForm() {
   renderAllGenrePills();
 }
 
-// ===== TABS =====
+// ===== TAB SWITCHING =====
 function switchTab(page, tabName) {
   const prefix = page === 'add' ? '' : 'detail-';
   document.querySelectorAll(`#page-${page} .tab-btn`).forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabName || btn.dataset.detailTab === tabName);
   });
-  document.querySelectorAll(`#page-${page} .tab-content`).forEach(c => c.classList.add('hidden'));
+  document.querySelectorAll(`#page-${page} .tab-content`).forEach(content => {
+    content.classList.add('hidden');
+  });
   const activeContent = document.getElementById(`${prefix}tab-${tabName}`);
   if (activeContent) activeContent.classList.remove('hidden');
 }
@@ -579,7 +604,7 @@ function updateTabCount(id, count) {
   if (el) el.textContent = count;
 }
 
-// ===== RENDER SUB-LISTS =====
+// ===== RENDER LISTS =====
 function renderChapters(containerId, chapters, editable) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -596,12 +621,15 @@ function renderChapters(containerId, chapters, editable) {
       ${editable ? `<button class="item-delete" data-idx="${i}" title="Remove">&#10005;</button>` : ''}
     </div>
   `).join('');
+
   if (editable) {
     container.querySelectorAll('.item-delete').forEach(btn => {
       btn.addEventListener('click', () => {
-        chapters.splice(parseInt(btn.dataset.idx), 1);
+        const idx = parseInt(btn.dataset.idx);
+        chapters.splice(idx, 1);
         renderChapters(containerId, chapters, editable);
-        updateTabCount(containerId === 'chapters-list' ? 'tab-count-chapters' : 'detail-tab-count-chapters', chapters.length);
+        const isAdd = containerId === 'chapters-list';
+        updateTabCount(isAdd ? 'tab-count-chapters' : 'detail-tab-count-chapters', chapters.length);
       });
     });
   }
@@ -617,12 +645,15 @@ function renderPhotos(containerId, photos, editable) {
       ${editable ? `<button class="photo-remove" data-idx="${i}" title="Remove">&#10005;</button>` : ''}
     </div>
   `).join('');
+
   if (editable) {
     container.querySelectorAll('.photo-remove').forEach(btn => {
       btn.addEventListener('click', () => {
-        photos.splice(parseInt(btn.dataset.idx), 1);
+        const idx = parseInt(btn.dataset.idx);
+        photos.splice(idx, 1);
         renderPhotos(containerId, photos, editable);
-        updateTabCount(containerId === 'photo-grid' ? 'tab-count-photos' : 'detail-tab-count-photos', photos.length);
+        const isAdd = containerId === 'photo-grid';
+        updateTabCount(isAdd ? 'tab-count-photos' : 'detail-tab-count-photos', photos.length);
       });
     });
   }
@@ -641,12 +672,15 @@ function renderComments(containerId, comments, editable) {
       ${editable ? `<button class="item-delete" data-idx="${i}" title="Remove">&#10005;</button>` : ''}
     </div>
   `).join('');
+
   if (editable) {
     container.querySelectorAll('.item-delete').forEach(btn => {
       btn.addEventListener('click', () => {
-        comments.splice(parseInt(btn.dataset.idx), 1);
+        const idx = parseInt(btn.dataset.idx);
+        comments.splice(idx, 1);
         renderComments(containerId, comments, editable);
-        updateTabCount(containerId === 'comments-list' ? 'tab-count-comments' : 'detail-tab-count-comments', comments.length);
+        const isAdd = containerId === 'comments-list';
+        updateTabCount(isAdd ? 'tab-count-comments' : 'detail-tab-count-comments', comments.length);
       });
     });
   }
@@ -667,16 +701,20 @@ function setupListPage() {
     searchClear.classList.add('hidden');
     renderList();
   });
+
   document.getElementById('toggle-filters').addEventListener('click', () => {
     state.showFilters = !state.showFilters;
     document.getElementById('filters-panel').classList.toggle('hidden', !state.showFilters);
     document.getElementById('toggle-filters').classList.toggle('active', state.showFilters);
   });
+
   document.getElementById('filter-manga-status').addEventListener('change', (e) => {
-    state.filters.mangaStatus = e.target.value; renderList();
+    state.filters.mangaStatus = e.target.value;
+    renderList();
   });
   document.getElementById('filter-my-status').addEventListener('change', (e) => {
-    state.filters.myStatus = e.target.value; renderList();
+    state.filters.myStatus = e.target.value;
+    renderList();
   });
   document.getElementById('clear-filters').addEventListener('click', () => {
     state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
@@ -750,6 +788,7 @@ function renderList() {
       : manga.myStatus.startsWith('Dropped') ? 'status-dropped'
       : manga.myStatus.startsWith('In Chapter') ? 'status-inchapter'
       : 'status-default';
+
     return `
       <div class="manga-card cute-card">
         <div class="manga-cover-wrap">
@@ -775,15 +814,18 @@ function renderList() {
             </button>
           </div>
         </div>
-      </div>`;
+      </div>
+    `;
   }).join('');
 
   grid.querySelectorAll('.manga-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const manga = state.mangas.find(m => m.id === btn.dataset.id);
       if (manga && confirm(`Delete "${manga.title}"?`)) {
+        showSyncing();
         state.mangas = state.mangas.filter(m => m.id !== btn.dataset.id);
         await deleteMangaFromCloud(btn.dataset.id);
+        showSynced();
         renderList();
       }
     });
@@ -799,8 +841,10 @@ function truncateStatus(status) {
 function setupDetailPage() {
   document.getElementById('save-btn').addEventListener('click', saveEditing);
   document.getElementById('cancel-edit-btn').addEventListener('click', () => {
-    state.editMode = false; renderDetail();
+    state.editMode = false;
+    renderDetail();
   });
+
   document.getElementById('detail-cover-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -810,6 +854,7 @@ function setupDetailPage() {
     cover.classList.remove('hidden');
     document.getElementById('detail-cover-fallback').classList.add('hidden');
   });
+
   document.getElementById('detail-toggle-genre-manager').addEventListener('click', () => {
     document.getElementById('detail-genre-manager').classList.toggle('hidden');
   });
@@ -821,9 +866,11 @@ function setupDetailPage() {
       renderDetailManagedGenres();
     }
   });
+
   document.querySelectorAll('#page-detail .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab('detail', btn.dataset.detailTab));
   });
+
   document.getElementById('detail-add-chapter-btn').addEventListener('click', () => {
     const num = document.getElementById('detail-chapter-num').value.trim();
     const reason = document.getElementById('detail-chapter-reason').value.trim();
@@ -834,6 +881,7 @@ function setupDetailPage() {
     renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
     updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
   });
+
   document.getElementById('detail-photo-upload').addEventListener('click', () => {
     document.getElementById('detail-photo-input').click();
   });
@@ -844,6 +892,7 @@ function setupDetailPage() {
     renderPhotos('detail-photo-grid', state.detailEdit.photos, true);
     updateTabCount('detail-tab-count-photos', state.detailEdit.photos.length);
   });
+
   document.getElementById('detail-add-comment-btn').addEventListener('click', () => {
     const text = document.getElementById('detail-comment-input').value.trim();
     if (!text) return;
@@ -860,31 +909,43 @@ function renderDetail() {
 
   const coverEl = document.getElementById('detail-cover');
   const fallbackEl = document.getElementById('detail-cover-fallback');
+  const overlayEl = document.getElementById('cover-change-overlay');
   if (manga.cover) {
-    coverEl.src = manga.cover; coverEl.classList.remove('hidden'); fallbackEl.classList.add('hidden');
+    coverEl.src = manga.cover;
+    coverEl.classList.remove('hidden');
+    fallbackEl.classList.add('hidden');
   } else {
-    coverEl.src = ''; coverEl.classList.add('hidden'); fallbackEl.classList.remove('hidden');
+    coverEl.src = '';
+    coverEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
   }
-  document.getElementById('cover-change-overlay').classList.toggle('hidden', !state.editMode);
-  document.getElementById('detail-readonly').classList.toggle('hidden', state.editMode);
-  document.getElementById('detail-edit').classList.toggle('hidden', !state.editMode);
+  overlayEl.classList.toggle('hidden', !state.editMode);
+
+  const readonlyEl = document.getElementById('detail-readonly');
+  const editEl = document.getElementById('detail-edit');
+  readonlyEl.classList.toggle('hidden', state.editMode);
+  editEl.classList.toggle('hidden', !state.editMode);
 
   const actionsEl = document.getElementById('detail-actions');
   actionsEl.innerHTML = state.editMode
-    ? `<button class="btn btn-danger" id="detail-cancel-btn">✕ Cancel</button>`
-    : `<button class="btn btn-danger" id="detail-delete-btn">🗑 Delete</button>
-       <button class="btn btn-edit" id="detail-edit-btn">✏️ Edit</button>`;
+    ? `<button class="btn btn-danger" id="detail-cancel-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel</button>`
+    : `<button class="btn btn-danger" id="detail-delete-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Delete</button>
+       <button class="btn btn-edit" id="detail-edit-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit</button>`;
 
   if (state.editMode) {
     document.getElementById('detail-cancel-btn').addEventListener('click', () => {
-      state.editMode = false; renderDetail();
+      state.editMode = false;
+      renderDetail();
     });
   } else {
     document.getElementById('detail-edit-btn').addEventListener('click', startEditing);
     document.getElementById('detail-delete-btn').addEventListener('click', async () => {
-      if (confirm(`Delete "${manga.title}"? This cannot be undone.`)) {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      if (manga && confirm(`Delete "${manga.title}"? This cannot be undone.`)) {
+        showSyncing();
         state.mangas = state.mangas.filter(m => m.id !== state.selectedMangaId);
         await deleteMangaFromCloud(state.selectedMangaId);
+        showSynced();
         navigate('list');
       }
     });
@@ -895,14 +956,20 @@ function renderDetail() {
     const otherEl = document.getElementById('detail-view-other');
     if (manga.otherTitles) { otherEl.textContent = manga.otherTitles; otherEl.style.display = 'block'; }
     else { otherEl.style.display = 'none'; }
+
+    const badgesEl = document.getElementById('detail-view-badges');
     const myClass = manga.myStatus.startsWith('Completed') ? 'my-completed'
       : manga.myStatus.startsWith('Dropped') ? 'my-dropped'
-      : manga.myStatus.startsWith('In Chapter') ? 'my-inchapter' : 'my-default';
-    document.getElementById('detail-view-badges').innerHTML = `
+      : manga.myStatus.startsWith('In Chapter') ? 'my-inchapter'
+      : 'my-default';
+    badgesEl.innerHTML = `
       <span class="detail-badge ${manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing'}">${manga.mangaStatus}</span>
-      <span class="detail-badge ${myClass}">${manga.myStatus}</span>`;
+      <span class="detail-badge ${myClass}">${manga.myStatus}</span>
+    `;
+
     document.getElementById('detail-view-genres').innerHTML =
       manga.genre.map(g => `<span class="detail-genre-tag">${escapeHtml(g)}</span>`).join('');
+
     const summaryEl = document.getElementById('detail-view-summary');
     if (manga.summary) { summaryEl.innerHTML = `<p>${escapeHtml(manga.summary)}</p>`; summaryEl.style.display = 'block'; }
     else { summaryEl.style.display = 'none'; }
@@ -927,6 +994,7 @@ function renderDetail() {
   renderChapters('detail-chapters-list', chapters, state.editMode);
   renderPhotos('detail-photo-grid', photos, state.editMode);
   renderComments('detail-comments-list', comments, state.editMode);
+
   updateTabCount('detail-tab-count-chapters', chapters.length);
   updateTabCount('detail-tab-count-photos', photos.length);
   updateTabCount('detail-tab-count-comments', comments.length);
@@ -937,9 +1005,12 @@ function startEditing() {
   if (!manga) return;
   state.editMode = true;
   state.detailEdit = {
-    title: manga.title, otherTitles: manga.otherTitles,
-    mangaStatus: manga.mangaStatus, myStatus: manga.myStatus,
-    summary: manga.summary, cover: manga.cover,
+    title: manga.title,
+    otherTitles: manga.otherTitles,
+    mangaStatus: manga.mangaStatus,
+    myStatus: manga.myStatus,
+    summary: manga.summary,
+    cover: manga.cover,
     chapters: [...manga.favoriteChapters],
     photos: [...manga.favoritePhotos],
     comments: [...manga.comments],
@@ -951,6 +1022,7 @@ function startEditing() {
 async function saveEditing() {
   const manga = state.mangas.find(m => m.id === state.selectedMangaId);
   if (!manga) return;
+
   manga.title = document.getElementById('detail-edit-title').value.trim();
   manga.otherTitles = document.getElementById('detail-edit-other').value.trim();
   manga.mangaStatus = document.getElementById('detail-edit-manga-status').value;
@@ -961,9 +1033,14 @@ async function saveEditing() {
   manga.favoritePhotos = [...state.detailEdit.photos];
   manga.comments = [...state.detailEdit.comments];
   manga.genre = [...state.detailEdit.selectedGenres];
+
+  showSyncing();
   await saveMangaToCloud(manga);
+  showSynced();
+
   state.editMode = false;
   renderDetail();
+  alert('Saved successfully! ☁️');
 }
 
 function renderDetailGenrePills() {
@@ -981,16 +1058,18 @@ function renderDetailManagedGenres() {
     const pill = document.createElement('span');
     pill.className = 'genre-pill managed';
     pill.innerHTML = `${genre} <span class="remove">&times;</span>`;
-    pill.querySelector('.remove').addEventListener('click', () => {
-      deleteGenre(genre);
-      renderDetailGenrePills();
-      renderDetailManagedGenres();
+    pill.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove')) {
+        deleteGenre(genre);
+        renderDetailGenrePills();
+        renderDetailManagedGenres();
+      }
     });
     container.appendChild(pill);
   });
 }
 
-// ===== UTILS =====
+// ===== HELPERS =====
 function escapeHtml(text) {
   if (!text) return '';
   const div = document.createElement('div');
@@ -999,4 +1078,4 @@ function escapeHtml(text) {
 }
 
 // ===== START =====
-document.addEventListener('DOMContentLoaded', setupAuth);
+document.addEventListener('DOMContentLoaded', init);
