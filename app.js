@@ -122,12 +122,24 @@ async function loadAppData() {
       year: m.year ?? ''
     }));
 
+    // Build genre list from cloud + all genres found in existing manga
+    const mangaGenres = new Set();
+    state.mangas.forEach(m => {
+      if (m.genre && Array.isArray(m.genre)) {
+        m.genre.forEach(g => mangaGenres.add(g));
+      }
+    });
+
     if (cloudGenres && cloudGenres.length > 0) {
-      state.genres = cloudGenres;
+      cloudGenres.forEach(g => mangaGenres.add(g));
+      state.genres = Array.from(mangaGenres).sort();
     } else {
-      state.genres = [...DEFAULT_GENRES];
-      await saveGenresToCloud(state.genres);
+      DEFAULT_GENRES.forEach(g => mangaGenres.add(g));
+      state.genres = Array.from(mangaGenres).sort();
     }
+
+    // Always save merged genres back to cloud
+    await saveGenresToCloud(state.genres);
     await migrateLocalStorageToCloud();
   } catch (e) {
     console.error("Cloud load failed:", e);
