@@ -516,6 +516,34 @@ function addGenre(name) {
   return added;
 }
 
+// ===== ADD GENRE TO ALL MANGA =====
+async function addGenreToAllManga(genreName) {
+  const trimmed = genreName.trim();
+  if (!trimmed) return;
+
+  // First add the genre to the global list if not exists
+  if (!state.genres.includes(trimmed)) {
+    state.genres.push(trimmed);
+    await saveGenresToCloud(state.genres);
+  }
+
+  // Add genre to all manga that don't already have it
+  let updatedCount = 0;
+  for (const manga of state.mangas) {
+    if (!manga.genre) manga.genre = [];
+    if (!manga.genre.includes(trimmed)) {
+      manga.genre.push(trimmed);
+      await saveMangaToCloud(manga);
+      updatedCount++;
+    }
+  }
+
+  showToast(`Added "${trimmed}" to ${updatedCount} manga! 🎉`);
+  renderAllGenrePills();
+  if (state.currentPage === 'list') renderList();
+  if (state.currentPage === 'detail') renderDetail();
+}
+
 function deleteGenre(genre) {
   if (!confirm(`Delete genre "${genre}"?`)) return;
   state.genres = state.genres.filter(g => g !== genre);
@@ -625,6 +653,14 @@ function setupAddPage() {
   document.getElementById('add-genre-btn').addEventListener('click', () => {
     const input = document.getElementById('new-genre');
     if (addGenre(input.value)) { input.value = ''; renderAllGenrePills(); }
+  });
+
+  document.getElementById('add-genre-to-all-btn').addEventListener('click', () => {
+    const input = document.getElementById('new-genre');
+    if (input.value.trim()) {
+      addGenreToAllManga(input.value);
+      input.value = '';
+    }
   });
 
   const myStatus = document.getElementById('my-status');
@@ -1114,7 +1150,7 @@ function renderList() {
           <div class="manga-info">
             <div class="manga-title" title="${escapeHtml(manga.title)}">${escapeHtml(manga.title)}</div>
             ${year}
-            <div class="manga-rating" data-manga-id="${manga.id}">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
+            <div class="manga-rating">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
             <div class="manga-genres">
               ${manga.genre && manga.genre.slice(0, 3).map(g => `<span class="manga-genre-tag">${escapeHtml(g)}</span>`).join('')}
               ${manga.genre && manga.genre.length > 3 ? `<span class="manga-genre-tag" style="background:var(--muted);color:var(--muted-fg)">+${manga.genre.length - 3}</span>` : ''}
@@ -1132,25 +1168,6 @@ function renderList() {
           </div>
         </div>`;
     }).join('');
-
-    // Quick rating on cards
-    grid.querySelectorAll('.manga-rating').forEach(ratingContainer => {
-      const mangaId = ratingContainer.dataset.mangaId;
-      const stars = ratingContainer.querySelectorAll('.star-display');
-      stars.forEach(star => {
-        star.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const newRating = parseInt(star.dataset.star);
-          const manga = state.mangas.find(m => m.id === mangaId);
-          if (!manga) return;
-          manga.rating = newRating;
-          await saveMangaToCloud(manga);
-          showToast(`Rated "${manga.title}" ${newRating}/10 ★`);
-          renderList();
-        });
-      });
-    });
 
     grid.querySelectorAll('.manga-delete').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1213,6 +1230,17 @@ function setupDetailPage() {
         input.value = '';
         renderDetailGenrePills();
         renderDetailManagedGenres();
+      }
+    });
+  }
+
+  const detailAddGenreToAllBtn = document.getElementById('detail-add-genre-to-all-btn');
+  if (detailAddGenreToAllBtn) {
+    detailAddGenreToAllBtn.addEventListener('click', () => {
+      const input = document.getElementById('detail-new-genre');
+      if (input.value.trim()) {
+        addGenreToAllManga(input.value);
+        input.value = '';
       }
     });
   }
@@ -1359,9 +1387,25 @@ function renderDetail() {
         <span class="detail-badge ${myClass}">${manga.myStatus}</span>`;
     }
 
-    // Rating display
+    // Rating display with quick edit
     const ratingEl = document.getElementById('detail-view-rating');
     renderStarDisplay(ratingEl, manga.rating || 0, 'large');
+
+    // Add click handlers for quick rating in readonly view
+    if (ratingEl) {
+      ratingEl.style.cursor = 'pointer';
+      const stars = ratingEl.querySelectorAll('.star-display');
+      stars.forEach((star, idx) => {
+        star.style.cursor = 'pointer';
+        star.addEventListener('click', async () => {
+          const newRating = idx + 1;
+          manga.rating = newRating;
+          await saveMangaToCloud(manga);
+          showToast(`Rated "${manga.title}" ${newRating}/10 ★`);
+          renderDetail();
+        });
+      });
+    }
 
     // Year display
     const infoEl = document.getElementById('detail-view-badges');
