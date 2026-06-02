@@ -48,8 +48,8 @@ let state = {
   selectedMangaId: null,
   editMode: false,
   addForm: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '' },
-  detailEdit: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '' },
-  filters: { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] },
+  detailEdit: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '', currentChapter: 1 },
+  filters: { search: '', mangaStatus: 'All', myStatus: 'All', genres: [], excludeGenres: [] },
   showFilters: false,
   showGenreManager: false,
   currentUser: null,
@@ -204,6 +204,16 @@ function showSynced() {
 function showSyncError() {
   const el = document.getElementById('sync-status');
   if (el) { el.textContent = '⚠️ Sync error — check connection'; el.className = 'sync-status error'; el.style.display = 'flex'; }
+}
+
+// ===== TOAST NOTIFICATIONS =====
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
 function showLoadingScreen(show) {
@@ -407,16 +417,35 @@ function renderStarDisplay(container, rating, size = 'small') {
 }
 
 // ===== GENRES =====
-function renderGenrePills(containerId, selectedGenres, onToggle) {
+function renderGenrePills(containerId, selectedGenres, onToggle, excludedGenres = []) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
   state.genres.forEach(genre => {
     const pill = document.createElement('button');
     pill.type = 'button';
-    pill.className = `genre-pill ${selectedGenres.includes(genre) ? 'active' : ''}`;
+    let className = 'genre-pill';
+    if (excludedGenres.includes(genre)) {
+      className += ' exclude';
+    } else if (selectedGenres.includes(genre)) {
+      className += ' active';
+    }
+    pill.className = className;
     pill.textContent = genre;
-    pill.addEventListener('click', () => onToggle(genre));
+
+    let clickTimer = null;
+    pill.addEventListener('click', (e) => {
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        onToggle(genre, 'exclude');
+      } else {
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          onToggle(genre, 'include');
+        }, 250);
+      }
+    });
     container.appendChild(pill);
   });
 }
@@ -439,22 +468,30 @@ function renderManagedGenres(containerId) {
 
 function renderAllGenrePills() {
   if (state.currentPage === 'add') {
-    renderGenrePills('genre-pills', state.addForm.selectedGenres, (g) => {
+    renderGenrePills('genre-pills', state.addForm.selectedGenres, (g, mode) => {
       toggleArray(state.addForm.selectedGenres, g);
       renderAllGenrePills();
     });
     renderManagedGenres('genre-list');
   }
   if (state.currentPage === 'list') {
-    renderGenrePills('filter-genre-pills', state.filters.genres, (g) => {
-      toggleArray(state.filters.genres, g);
+    renderGenrePills('filter-genre-pills', state.filters.genres, (g, mode) => {
+      if (mode === 'exclude') {
+        toggleArray(state.filters.excludeGenres, g);
+        const idx = state.filters.genres.indexOf(g);
+        if (idx > -1) state.filters.genres.splice(idx, 1);
+      } else {
+        toggleArray(state.filters.genres, g);
+        const idx = state.filters.excludeGenres.indexOf(g);
+        if (idx > -1) state.filters.excludeGenres.splice(idx, 1);
+      }
       state.listPage = 1;
       renderList();
       renderAllGenrePills();
-    });
+    }, state.filters.excludeGenres);
   }
   if (state.currentPage === 'detail' && state.editMode) {
-    renderGenrePills('detail-genre-pills', state.detailEdit.selectedGenres, (g) => {
+    renderGenrePills('detail-genre-pills', state.detailEdit.selectedGenres, (g, mode) => {
       toggleArray(state.detailEdit.selectedGenres, g);
       renderDetailGenrePills();
     });
@@ -492,11 +529,59 @@ function deleteGenre(genre) {
   state.detailEdit.selectedGenres = state.detailEdit.selectedGenres.filter(g => g !== genre);
 }
 
-// ===== FILE TO BASE64 =====
-function fileToBase64(file) {
-  return new Promise(resolve => {
+// ===== IMAGE RESIZE & COMPRESS =====
+function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function() {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let dataURL;
+      try {
+        dataURL = canvas.toDataURL('image/jpeg', quality);
+      } catch (e) {
+        dataURL = canvas.toDataURL('image/png');
+      }
+      resolve(dataURL);
+    };
+    img.onerror = () => resolve(base64Str);
+    img.src = base64Str;
+  });
+}
+
+// ===== FILE TO BASE64 (with resize) =====
+async function fileToBase64(file) {
+  return new Promise((resolve) => {
     const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
+    reader.onload = async (e) => {
+      const original = e.target.result;
+      if (file.size > 500 * 1024) {
+        const resized = await resizeImage(original, 1200, 1200, 0.85);
+        resolve(resized);
+      } else {
+        resolve(original);
+      }
+    };
+    reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
   });
 }
@@ -821,7 +906,7 @@ function setupListPage() {
   });
 
   document.getElementById('clear-filters').addEventListener('click', () => {
-    state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
+    state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [], excludeGenres: [] };
     state.showFilters = false;
     state.listPage = 1;
     searchInput.value = '';
@@ -843,7 +928,7 @@ function setupListPage() {
 }
 
 function getFilteredAndSortedMangas() {
-  const { search, mangaStatus, myStatus, genres } = state.filters;
+  const { search, mangaStatus, myStatus, genres, excludeGenres } = state.filters;
   let filtered = state.mangas.filter(m => {
     const matchSearch = !search ||
       (m.title && m.title.toLowerCase().includes(search.toLowerCase())) ||
@@ -851,7 +936,8 @@ function getFilteredAndSortedMangas() {
     const matchMangaStatus = mangaStatus === 'All' || m.mangaStatus === mangaStatus;
     const matchMyStatus = myStatus === 'All' || (m.myStatus && m.myStatus.startsWith(myStatus));
     const matchGenre = genres.length === 0 || genres.some(g => m.genre && m.genre.includes(g));
-    return matchSearch && matchMangaStatus && matchMyStatus && matchGenre;
+    const matchExclude = excludeGenres.length === 0 || !excludeGenres.some(g => m.genre && m.genre.includes(g));
+    return matchSearch && matchMangaStatus && matchMyStatus && matchGenre && matchExclude;
   });
 
   // Sort
@@ -955,7 +1041,8 @@ function renderList() {
     state.filters.search, 
     state.filters.mangaStatus !== 'All', 
     state.filters.myStatus !== 'All', 
-    state.filters.genres.length > 0
+    state.filters.genres.length > 0,
+    state.filters.excludeGenres.length > 0
   ].filter(Boolean).length;
 
   const badge = document.getElementById('filter-badge');
@@ -981,7 +1068,7 @@ function renderList() {
         actionBtn.textContent = 'Clear Filters';
         actionBtn.href = '#list';
         actionBtn.onclick = () => {
-          state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [] };
+          state.filters = { search: '', mangaStatus: 'All', myStatus: 'All', genres: [], excludeGenres: [] };
           state.listPage = 1;
           document.getElementById('search-input').value = '';
           document.getElementById('filter-manga-status').value = 'All';
@@ -1014,10 +1101,10 @@ function renderList() {
       const year = manga.year ? `<div class="manga-year">${escapeHtml(manga.year)}</div>` : '';
       const stars = [];
       for (let i = 1; i <= 10; i++) {
-        stars.push(`<span class="star-display ${i <= rating ? '' : 'empty'}">${i <= rating ? '&#9733;' : '&#9734;'}</span>`);
+        stars.push(`<span class="star-display ${i <= rating ? '' : 'empty'}" data-manga-id="${manga.id}" data-star="${i}">${i <= rating ? '&#9733;' : '&#9734;'}</span>`);
       }
       return `
-        <div class="manga-card cute-card">
+        <div class="manga-card cute-card" data-manga-id="${manga.id}">
           <div class="manga-cover-wrap">
             ${manga.cover
               ? `<img src="${manga.cover}" alt="${escapeHtml(manga.title)}" class="manga-cover">`
@@ -1027,7 +1114,7 @@ function renderList() {
           <div class="manga-info">
             <div class="manga-title" title="${escapeHtml(manga.title)}">${escapeHtml(manga.title)}</div>
             ${year}
-            <div class="manga-rating">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
+            <div class="manga-rating" data-manga-id="${manga.id}">${stars.join('')}<span class="rating-number">${rating}/10</span></div>
             <div class="manga-genres">
               ${manga.genre && manga.genre.slice(0, 3).map(g => `<span class="manga-genre-tag">${escapeHtml(g)}</span>`).join('')}
               ${manga.genre && manga.genre.length > 3 ? `<span class="manga-genre-tag" style="background:var(--muted);color:var(--muted-fg)">+${manga.genre.length - 3}</span>` : ''}
@@ -1045,6 +1132,25 @@ function renderList() {
           </div>
         </div>`;
     }).join('');
+
+    // Quick rating on cards
+    grid.querySelectorAll('.manga-rating').forEach(ratingContainer => {
+      const mangaId = ratingContainer.dataset.mangaId;
+      const stars = ratingContainer.querySelectorAll('.star-display');
+      stars.forEach(star => {
+        star.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const newRating = parseInt(star.dataset.star);
+          const manga = state.mangas.find(m => m.id === mangaId);
+          if (!manga) return;
+          manga.rating = newRating;
+          await saveMangaToCloud(manga);
+          showToast(`Rated "${manga.title}" ${newRating}/10 ★`);
+          renderList();
+        });
+      });
+    });
 
     grid.querySelectorAll('.manga-delete').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1107,6 +1213,35 @@ function setupDetailPage() {
         input.value = '';
         renderDetailGenrePills();
         renderDetailManagedGenres();
+      }
+    });
+  }
+
+  // Chapter controls (+/- buttons)
+  const chapterMinus = document.getElementById('detail-chapter-minus');
+  const chapterPlus = document.getElementById('detail-chapter-plus');
+  if (chapterMinus) {
+    chapterMinus.addEventListener('click', () => {
+      if (state.detailEdit.currentChapter > 1) {
+        state.detailEdit.currentChapter--;
+        document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
+      }
+    });
+  }
+  if (chapterPlus) {
+    chapterPlus.addEventListener('click', () => {
+      state.detailEdit.currentChapter++;
+      document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
+    });
+  }
+
+  // My status select change -> show/hide chapter controls
+  const myStatusSelect = document.getElementById('detail-edit-my-status-select');
+  if (myStatusSelect) {
+    myStatusSelect.addEventListener('change', () => {
+      const chapterControls = document.getElementById('detail-edit-chapter-controls');
+      if (chapterControls) {
+        chapterControls.classList.toggle('hidden', myStatusSelect.value !== 'In Chapter');
       }
     });
   }
@@ -1231,7 +1366,6 @@ function renderDetail() {
     // Year display
     const infoEl = document.getElementById('detail-view-badges');
     if (infoEl && manga.year) {
-      // Check if year element already exists
       let yearEl = document.getElementById('detail-year-display');
       if (!yearEl) {
         yearEl = document.createElement('div');
@@ -1260,16 +1394,28 @@ function renderDetail() {
     const editTitle = document.getElementById('detail-edit-title');
     const editOther = document.getElementById('detail-edit-other');
     const editMangaStatus = document.getElementById('detail-edit-manga-status');
-    const editMyStatus = document.getElementById('detail-edit-my-status');
+    const editMyStatusSelect = document.getElementById('detail-edit-my-status-select');
     const editSummary = document.getElementById('detail-edit-summary');
     const editYear = document.getElementById('detail-edit-year');
 
     if (editTitle) editTitle.value = state.detailEdit.title;
     if (editOther) editOther.value = state.detailEdit.otherTitles;
     if (editMangaStatus) editMangaStatus.value = state.detailEdit.mangaStatus;
-    if (editMyStatus) editMyStatus.value = state.detailEdit.myStatus;
+    if (editMyStatusSelect) editMyStatusSelect.value = state.detailEdit.myStatus;
     if (editSummary) editSummary.value = state.detailEdit.summary;
     if (editYear) editYear.value = state.detailEdit.year || '';
+
+    // Setup chapter controls visibility based on status
+    const chapterControls = document.getElementById('detail-edit-chapter-controls');
+    if (chapterControls) {
+      const isInChapter = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('In Chapter');
+      chapterControls.classList.toggle('hidden', !isInChapter);
+      if (isInChapter) {
+        const match = state.detailEdit.myStatus.match(/In Chapter (\d+)/);
+        state.detailEdit.currentChapter = match ? parseInt(match[1]) : 1;
+        document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
+      }
+    }
 
     // Setup star rating for edit
     if (!detailRatingControl) {
@@ -1302,6 +1448,14 @@ function startEditing() {
   const manga = state.mangas.find(m => m.id === state.selectedMangaId);
   if (!manga) return;
   state.editMode = true;
+
+  // Parse current chapter from status
+  let currentChapter = 1;
+  if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
+    const match = manga.myStatus.match(/In Chapter (\d+)/);
+    if (match) currentChapter = parseInt(match[1]);
+  }
+
   state.detailEdit = {
     title: manga.title, 
     otherTitles: manga.otherTitles || '',
@@ -1311,6 +1465,7 @@ function startEditing() {
     cover: manga.cover || '',
     rating: manga.rating || 0, 
     year: manga.year || '',
+    currentChapter: currentChapter,
     chapters: [...(manga.favoriteChapters || [])],
     photos: [...(manga.favoritePhotos || [])],
     selectedGenres: [...(manga.genre || [])],
@@ -1325,14 +1480,21 @@ async function saveEditing() {
   const editTitle = document.getElementById('detail-edit-title');
   const editOther = document.getElementById('detail-edit-other');
   const editMangaStatus = document.getElementById('detail-edit-manga-status');
-  const editMyStatus = document.getElementById('detail-edit-my-status');
+  const editMyStatusSelect = document.getElementById('detail-edit-my-status-select');
   const editSummary = document.getElementById('detail-edit-summary');
   const editYear = document.getElementById('detail-edit-year');
 
   manga.title = editTitle ? editTitle.value.trim() : manga.title;
   manga.otherTitles = editOther ? editOther.value.trim() : manga.otherTitles;
   manga.mangaStatus = editMangaStatus ? editMangaStatus.value : manga.mangaStatus;
-  manga.myStatus = editMyStatus ? editMyStatus.value.trim() : manga.myStatus;
+
+  // Handle my status with chapter number
+  let myStatusVal = editMyStatusSelect ? editMyStatusSelect.value : manga.myStatus;
+  if (myStatusVal === 'In Chapter') {
+    myStatusVal = `In Chapter ${state.detailEdit.currentChapter}`;
+  }
+  manga.myStatus = myStatusVal;
+
   manga.summary = editSummary ? editSummary.value.trim() : manga.summary;
   manga.cover = state.detailEdit.cover;
   manga.rating = state.detailEdit.rating || 0;
