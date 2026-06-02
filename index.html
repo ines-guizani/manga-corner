@@ -251,7 +251,7 @@
             </div>
             <div class="field">
               <label class="field-label">Year of Creation</label>
-              <input type="number" id="year-created" class="input" min="1900" max="2099" placeholder="e.g. 2020">
+              <input type="number" id="year-created" class="input" min="1950" max="2026" placeholder="e.g. 2020">
             </div>
         </div>
 
@@ -465,7 +465,20 @@
                 </div>
                 <div class="field">
                   <label class="field-label">My Status</label>
-                  <input type="text" id="detail-edit-my-status" class="input">
+                  <select id="detail-edit-my-status-select" class="input">
+                    <option value="Completed">Completed</option>
+                    <option value="Dropped">Dropped</option>
+                    <option value="Didn't start yet">Didn't start yet</option>
+                    <option value="In Chapter">In Chapter</option>
+                  </select>
+                </div>
+                <div class="field hidden" id="detail-edit-chapter-controls">
+                  <label class="field-label">Current Chapter</label>
+                  <div class="chapter-controls">
+                    <button type="button" class="chapter-btn" id="detail-chapter-minus" title="Decrease">&#8722;</button>
+                    <span class="chapter-display" id="detail-chapter-display">1</span>
+                    <button type="button" class="chapter-btn" id="detail-chapter-plus" title="Increase">+</button>
+                  </div>
                 </div>
               </div>              <div class="field">
                 <label class="field-label">Rating (0-10)</label>
@@ -486,7 +499,7 @@
               </div>
               <div class="field">
                 <label class="field-label">Year of Creation</label>
-                <input type="number" id="detail-edit-year" class="input" min="1900" max="2099" placeholder="e.g. 2020">
+                <input type="number" id="detail-edit-year" class="input" min="1950" max="2026" placeholder="e.g. 2020">
               </div>
               <div class="field">
                 <div class="genre-header">
@@ -588,6 +601,7 @@
   </div>
 
   </div><!-- end app-wrapper -->
+  <div id="toast" class="toast"></div>
 
   <script type="module" src="app.js"></script>
 </body>
