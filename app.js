@@ -48,10 +48,11 @@ let state = {
   selectedMangaId: null,
   editMode: false,
   addForm: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '' },
-  detailEdit: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '', currentChapter: 1 },
+  detailEdit: { chapters: [], photos: [], cover: '', selectedGenres: [], rating: 0, year: '', currentChapter: 1, mangaStatusChapter: 1 },
   filters: { search: '', mangaStatus: 'All', myStatus: 'All', genres: [], excludeGenres: [] },
   showFilters: false,
   showGenreManager: false,
+  showDetailGenreManager: false,
   currentUser: null,
   listPage: 1,
   sortBy: 'newest',
@@ -524,7 +525,10 @@ function addGenre(name) {
   genres.forEach(g => {
     if (!state.genres.includes(g)) { state.genres.push(g); added = true; }
   });
-  if (added) saveGenresToCloud(state.genres);
+  if (added) {
+    state.genres.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    saveGenresToCloud(state.genres);
+  }
   return added;
 }
 
@@ -559,6 +563,7 @@ async function addGenreToAllManga(genreName) {
 function deleteGenre(genre) {
   if (!confirm(`Delete genre "${genre}"?`)) return;
   state.genres = state.genres.filter(g => g !== genre);
+  state.genres.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   saveGenresToCloud(state.genres);
   state.mangas.forEach(m => {
     m.genre = m.genre.filter(g => g !== genre);
@@ -593,11 +598,28 @@ function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200, quality = 0.8
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+      // Fill white background first (for images with transparency)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
+
+      // Detect original format from base64 string
+      const isPNG = base64Str.includes('image/png');
+      const isWebP = base64Str.includes('image/webp');
+      const isGIF = base64Str.includes('image/gif');
 
       let dataURL;
       try {
-        dataURL = canvas.toDataURL('image/jpeg', quality);
+        if (isPNG) {
+          dataURL = canvas.toDataURL('image/png');
+        } else if (isWebP) {
+          try { dataURL = canvas.toDataURL('image/webp', quality); }
+          catch (e) { dataURL = canvas.toDataURL('image/png'); }
+        } else if (isGIF) {
+          dataURL = canvas.toDataURL('image/png');
+        } else {
+          dataURL = canvas.toDataURL('image/jpeg', quality);
+        }
       } catch (e) {
         dataURL = canvas.toDataURL('image/png');
       }
@@ -614,7 +636,8 @@ async function fileToBase64(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const original = e.target.result;
-      if (file.size > 500 * 1024) {
+      // Always resize PNG and WebP (they can be large), and any file > 500KB
+      if (file.size > 500 * 1024 || file.type === 'image/png' || file.type === 'image/webp') {
         const resized = await resizeImage(original, 1200, 1200, 0.85);
         resolve(resized);
       } else {
@@ -681,6 +704,26 @@ function setupAddPage() {
     document.getElementById('current-field').classList.toggle('hidden', myStatus.value !== 'In Chapter');
   });
 
+  // Manga status chapter controls (for Completed/Stopped)
+  const mangaStatusSelect = document.getElementById('manga-status');
+  const mangaStatusChapterField = document.getElementById('manga-status-chapter-field');
+  const mangaStatusChapterInput = document.getElementById('manga-status-chapter');
+
+  mangaStatusSelect.addEventListener('change', () => {
+    const needsChapter = mangaStatusSelect.value === 'Completed' || mangaStatusSelect.value === 'Stopped';
+    mangaStatusChapterField.classList.toggle('hidden', !needsChapter);
+  });
+
+  document.getElementById('manga-status-chapter-minus').addEventListener('click', () => {
+    const val = parseInt(mangaStatusChapterInput.value) || 1;
+    if (val > 1) mangaStatusChapterInput.value = val - 1;
+  });
+
+  document.getElementById('manga-status-chapter-plus').addEventListener('click', () => {
+    const val = parseInt(mangaStatusChapterInput.value) || 0;
+    mangaStatusChapterInput.value = val + 1;
+  });
+
   // Setup star rating for add form
   addRatingControl = setupStarRating('add-rating-stars', 'rating-input', 'add-rating-value', 0, (val) => {
     state.addForm.rating = val;
@@ -735,12 +778,18 @@ function setupAddPage() {
       if (chap) myStatusVal = `In Chapter ${chap}`;
     }
 
+    let mangaStatusVal = document.getElementById('manga-status').value;
+    if (mangaStatusVal === 'Completed' || mangaStatusVal === 'Stopped') {
+      const chap = document.getElementById('manga-status-chapter').value.trim();
+      if (chap) mangaStatusVal = `${mangaStatusVal} (at chapter ${chap})`;
+    }
+
     const manga = {
       id: `manga_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       title,
       otherTitles: document.getElementById('other-titles').value.trim(),
       genre: [...state.addForm.selectedGenres],
-      mangaStatus: document.getElementById('manga-status').value,
+      mangaStatus: mangaStatusVal,
       myStatus: myStatusVal,
       summary: document.getElementById('summary').value.trim(),
       cover: state.addForm.cover,
@@ -809,18 +858,29 @@ function renderChapters(containerId, chapters, editable) {
         <span class="item-title">Chapter ${ch.number}</span>
         <p class="item-desc">${escapeHtml(ch.reason)}</p>
       </div>
-      ${editable ? `<button class="item-delete" data-idx="${i}" title="Remove">&#10005;</button>` : ''}
+      <button class="item-delete" data-idx="${i}" title="Remove">&#10005;</button>
     </div>
   `).join('');
-  if (editable) {
-    container.querySelectorAll('.item-delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        chapters.splice(parseInt(btn.dataset.idx), 1);
+  container.querySelectorAll('.item-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      if (editable) {
+        chapters.splice(idx, 1);
         renderChapters(containerId, chapters, editable);
         updateTabCount(containerId === 'chapters-list' ? 'tab-count-chapters' : 'detail-tab-count-chapters', chapters.length);
-      });
+      } else {
+        // View mode - delete from manga directly
+        const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+        if (manga && manga.favoriteChapters) {
+          manga.favoriteChapters.splice(idx, 1);
+          await saveMangaToCloud(manga);
+          renderChapters(containerId, manga.favoriteChapters, false);
+          updateTabCount('detail-tab-count-chapters', manga.favoriteChapters.length);
+          showToast('Chapter removed! 🗑️');
+        }
+      }
     });
-  }
+  });
 }
 
 function renderPhotos(containerId, photos, editable) {
@@ -831,7 +891,7 @@ function renderPhotos(containerId, photos, editable) {
   container.innerHTML = photos.map((src, i) => `
     <div class="photo-item" data-idx="${i}">
       <img src="${src}" alt="Photo ${i + 1}">
-      ${editable ? `<button class="photo-remove" data-idx="${i}" title="Remove">&#10005;</button>` : ''}
+      <button class="photo-remove" data-idx="${i}" title="Remove">&#10005;</button>
     </div>
   `).join('');
 
@@ -844,16 +904,27 @@ function renderPhotos(containerId, photos, editable) {
     });
   });
 
-  if (editable) {
-    container.querySelectorAll('.photo-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        photos.splice(parseInt(btn.dataset.idx), 1);
+  container.querySelectorAll('.photo-remove').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx);
+      if (editable) {
+        photos.splice(idx, 1);
         renderPhotos(containerId, photos, editable);
         updateTabCount(containerId === 'photo-grid' ? 'tab-count-photos' : 'detail-tab-count-photos', photos.length);
-      });
+      } else {
+        // View mode - delete from manga directly
+        const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+        if (manga && manga.favoritePhotos) {
+          manga.favoritePhotos.splice(idx, 1);
+          await saveMangaToCloud(manga);
+          renderPhotos(containerId, manga.favoritePhotos, false);
+          updateTabCount('detail-tab-count-photos', manga.favoritePhotos.length);
+          showToast('Photo removed! 🗑️');
+        }
+      }
     });
-  }
+  });
 }
 
 // ===== LIGHTBOX =====
@@ -981,7 +1052,7 @@ function getFilteredAndSortedMangas() {
     const matchSearch = !search ||
       (m.title && m.title.toLowerCase().includes(search.toLowerCase())) ||
       (m.otherTitles && m.otherTitles.toLowerCase().includes(search.toLowerCase()));
-    const matchMangaStatus = mangaStatus === 'All' || m.mangaStatus === mangaStatus;
+    const matchMangaStatus = mangaStatus === 'All' || (m.mangaStatus && m.mangaStatus.startsWith(mangaStatus));
     const matchMyStatus = myStatus === 'All' || (m.myStatus && m.myStatus.startsWith(myStatus));
     const matchGenre = genres.length === 0 || genres.some(g => m.genre && m.genre.includes(g));
     const matchExclude = excludeGenres.length === 0 || !excludeGenres.some(g => m.genre && m.genre.includes(g));
@@ -1140,7 +1211,9 @@ function renderList() {
 
   if (grid) {
     grid.innerHTML = pageItems.map(manga => {
-      const statusClass = manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing';
+      let statusClass = 'ongoing';
+      if (manga.mangaStatus && manga.mangaStatus.startsWith('Completed')) statusClass = 'completed';
+      else if (manga.mangaStatus && manga.mangaStatus.startsWith('Stopped')) statusClass = 'dropped';
       const myStatusClass = manga.myStatus && manga.myStatus.startsWith('Completed') ? 'status-completed'
         : manga.myStatus && manga.myStatus.startsWith('Dropped') ? 'status-dropped'
         : manga.myStatus && manga.myStatus.startsWith('In Chapter') ? 'status-inchapter'
@@ -1230,7 +1303,9 @@ function setupDetailPage() {
   const detailToggleGenre = document.getElementById('detail-toggle-genre-manager');
   if (detailToggleGenre) {
     detailToggleGenre.addEventListener('click', () => {
-      document.getElementById('detail-genre-manager').classList.toggle('hidden');
+      state.showDetailGenreManager = !state.showDetailGenreManager;
+      const manager = document.getElementById('detail-genre-manager');
+      if (manager) manager.classList.toggle('hidden', !state.showDetailGenreManager);
     });
   }
 
@@ -1257,7 +1332,7 @@ function setupDetailPage() {
     });
   }
 
-  // Chapter controls (+/- buttons)
+  // Chapter controls (+/- buttons) for my status
   const chapterMinus = document.getElementById('detail-chapter-minus');
   const chapterPlus = document.getElementById('detail-chapter-plus');
   if (chapterMinus) {
@@ -1286,21 +1361,99 @@ function setupDetailPage() {
     });
   }
 
+  // Manga status chapter controls (for Completed/Stopped)
+  const detailMangaStatusSelect = document.getElementById('detail-edit-manga-status');
+  const detailMangaStatusChapterField = document.getElementById('detail-edit-manga-status-chapter-field');
+  const detailMangaStatusChapterInput = document.getElementById('detail-edit-manga-status-chapter');
+
+  if (detailMangaStatusSelect) {
+    detailMangaStatusSelect.addEventListener('change', () => {
+      const needsChapter = detailMangaStatusSelect.value === 'Completed' || detailMangaStatusSelect.value === 'Stopped';
+      if (detailMangaStatusChapterField) {
+        detailMangaStatusChapterField.classList.toggle('hidden', !needsChapter);
+      }
+    });
+  }
+
+  const detailMangaStatusChapterMinus = document.getElementById('detail-manga-status-chapter-minus');
+  const detailMangaStatusChapterPlus = document.getElementById('detail-manga-status-chapter-plus');
+
+  if (detailMangaStatusChapterMinus) {
+    detailMangaStatusChapterMinus.addEventListener('click', () => {
+      const val = parseInt(detailMangaStatusChapterInput.value) || 1;
+      if (val > 1) detailMangaStatusChapterInput.value = val - 1;
+    });
+  }
+  if (detailMangaStatusChapterPlus) {
+    detailMangaStatusChapterPlus.addEventListener('click', () => {
+      const val = parseInt(detailMangaStatusChapterInput.value) || 0;
+      detailMangaStatusChapterInput.value = val + 1;
+    });
+  }
+
+  // Quick chapter controls in view mode
+  const quickChapterMinus = document.getElementById('quick-chapter-minus');
+  const quickChapterPlus = document.getElementById('quick-chapter-plus');
+  const quickChapterInput = document.getElementById('quick-chapter-input');
+  const quickChapterSave = document.getElementById('quick-chapter-save');
+
+  if (quickChapterMinus) {
+    quickChapterMinus.addEventListener('click', () => {
+      const val = parseInt(quickChapterInput.value) || 1;
+      if (val > 1) quickChapterInput.value = val - 1;
+    });
+  }
+  if (quickChapterPlus) {
+    quickChapterPlus.addEventListener('click', () => {
+      const val = parseInt(quickChapterInput.value) || 0;
+      quickChapterInput.value = val + 1;
+    });
+  }
+  if (quickChapterSave) {
+    quickChapterSave.addEventListener('click', async () => {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      if (!manga || !quickChapterInput.value) return;
+      const chapterNum = parseInt(quickChapterInput.value);
+      if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
+        manga.myStatus = `In Chapter ${chapterNum}`;
+      } else {
+        manga.myStatus = `In Chapter ${chapterNum}`;
+      }
+      await saveMangaToCloud(manga);
+      showToast(`Updated to chapter ${chapterNum}! 📖`);
+      renderDetail();
+    });
+  }
+
   document.querySelectorAll('#page-detail .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab('detail', btn.dataset.detailTab));
   });
 
   const detailAddChapter = document.getElementById('detail-add-chapter-btn');
   if (detailAddChapter) {
-    detailAddChapter.addEventListener('click', () => {
+    detailAddChapter.addEventListener('click', async () => {
       const num = document.getElementById('detail-chapter-num').value.trim();
       const reason = document.getElementById('detail-chapter-reason').value.trim();
       if (!num || !reason) return;
-      state.detailEdit.chapters.push({ number: parseInt(num), reason });
+
+      if (state.editMode) {
+        state.detailEdit.chapters.push({ number: parseInt(num), reason });
+        renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
+        updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
+      } else {
+        // View mode - save directly to manga
+        const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+        if (manga) {
+          if (!manga.favoriteChapters) manga.favoriteChapters = [];
+          manga.favoriteChapters.push({ number: parseInt(num), reason });
+          await saveMangaToCloud(manga);
+          renderChapters('detail-chapters-list', manga.favoriteChapters, false);
+          updateTabCount('detail-tab-count-chapters', manga.favoriteChapters.length);
+          showToast(`Added chapter ${num} to favorites! ⭐`);
+        }
+      }
       document.getElementById('detail-chapter-num').value = '';
       document.getElementById('detail-chapter-reason').value = '';
-      renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
-      updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
     });
   }
 
@@ -1318,9 +1471,23 @@ function setupDetailPage() {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
       const dataUrls = await Promise.all(files.map(fileToBase64));
-      state.detailEdit.photos.push(...dataUrls);
-      renderPhotos('detail-photo-grid', state.detailEdit.photos, true);
-      updateTabCount('detail-tab-count-photos', state.detailEdit.photos.length);
+
+      if (state.editMode) {
+        state.detailEdit.photos.push(...dataUrls);
+        renderPhotos('detail-photo-grid', state.detailEdit.photos, true);
+        updateTabCount('detail-tab-count-photos', state.detailEdit.photos.length);
+      } else {
+        // View mode - save directly to manga
+        const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+        if (manga) {
+          if (!manga.favoritePhotos) manga.favoritePhotos = [];
+          manga.favoritePhotos.push(...dataUrls);
+          await saveMangaToCloud(manga);
+          renderPhotos('detail-photo-grid', manga.favoritePhotos, false);
+          updateTabCount('detail-tab-count-photos', manga.favoritePhotos.length);
+          showToast(`Added ${files.length} photo${files.length > 1 ? 's' : ''}! 📸`);
+        }
+      }
       detailPhotoInput.value = '';
     });
   }
@@ -1392,11 +1559,28 @@ function renderDetail() {
       : manga.myStatus && manga.myStatus.startsWith('Dropped') ? 'my-dropped'
       : manga.myStatus && manga.myStatus.startsWith('In Chapter') ? 'my-inchapter' : 'my-default';
 
+    // Determine manga status badge class
+    let mangaStatusClass = 'ongoing';
+    if (manga.mangaStatus && manga.mangaStatus.startsWith('Completed')) mangaStatusClass = 'completed';
+    else if (manga.mangaStatus && manga.mangaStatus.startsWith('Stopped')) mangaStatusClass = 'stopped';
+
     const badgesEl = document.getElementById('detail-view-badges');
     if (badgesEl) {
       badgesEl.innerHTML = `
-        <span class="detail-badge ${manga.mangaStatus === 'Completed' ? 'completed' : 'ongoing'}">${manga.mangaStatus}</span>
+        <span class="detail-badge ${mangaStatusClass}">${manga.mangaStatus}</span>
         <span class="detail-badge ${myClass}">${manga.myStatus}</span>`;
+    }
+
+    // View mode - setup quick chapter controls
+    const quickChapterControls = document.getElementById('quick-chapter-controls');
+    const quickChapterInput = document.getElementById('quick-chapter-input');
+    if (quickChapterControls && quickChapterInput) {
+      const isInChapter = manga.myStatus && manga.myStatus.startsWith('In Chapter');
+      quickChapterControls.style.display = isInChapter ? 'block' : 'none';
+      if (isInChapter) {
+        const match = manga.myStatus.match(/In Chapter (\d+)/);
+        quickChapterInput.value = match ? parseInt(match[1]) : 1;
+      }
     }
 
     // Rating display with quick edit
@@ -1488,8 +1672,16 @@ function renderDetail() {
 
   const chapterEditRow = document.getElementById('detail-chapter-edit-row');
   const photoUpload = document.getElementById('detail-photo-upload');
-  if (chapterEditRow) chapterEditRow.classList.toggle('hidden', !state.editMode);
-  if (photoUpload) photoUpload.classList.toggle('hidden', !state.editMode);
+  // Chapter edit row and photo upload are now always visible (for quick add in view mode)
+  // But we still need to handle the chapter input visibility for edit mode vs view mode
+  if (chapterEditRow) {
+    // Always show the chapter add row
+    chapterEditRow.classList.remove('hidden');
+  }
+  if (photoUpload) {
+    // Always show the photo upload area
+    photoUpload.classList.remove('hidden');
+  }
 
   const chapters = state.editMode ? state.detailEdit.chapters : manga.favoriteChapters;
   const photos = state.editMode ? state.detailEdit.photos : manga.favoritePhotos;
@@ -1504,24 +1696,37 @@ function startEditing() {
   const manga = state.mangas.find(m => m.id === state.selectedMangaId);
   if (!manga) return;
   state.editMode = true;
+  state.showDetailGenreManager = false;
 
-  // Parse current chapter from status
+  // Parse current chapter from my status
   let currentChapter = 1;
   if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
     const match = manga.myStatus.match(/In Chapter (\d+)/);
     if (match) currentChapter = parseInt(match[1]);
   }
 
+  // Parse manga status chapter
+  let mangaStatusChapter = 1;
+  let mangaStatusClean = manga.mangaStatus;
+  if (manga.mangaStatus && (manga.mangaStatus.includes('(at chapter') || manga.mangaStatus.includes('Completed (at chapter') || manga.mangaStatus.includes('Stopped (at chapter'))) {
+    const match = manga.mangaStatus.match(/(Completed|Stopped) \(at chapter (\d+)\)/);
+    if (match) {
+      mangaStatusChapter = parseInt(match[2]);
+      mangaStatusClean = match[1];
+    }
+  }
+
   state.detailEdit = {
     title: manga.title, 
     otherTitles: manga.otherTitles || '',
-    mangaStatus: manga.mangaStatus, 
+    mangaStatus: mangaStatusClean, 
     myStatus: manga.myStatus,
     summary: manga.summary || '', 
     cover: manga.cover || '',
     rating: manga.rating || 0, 
     year: manga.year || '',
     currentChapter: currentChapter,
+    mangaStatusChapter: mangaStatusChapter,
     chapters: [...(manga.favoriteChapters || [])],
     photos: [...(manga.favoritePhotos || [])],
     selectedGenres: [...(manga.genre || [])],
@@ -1542,7 +1747,15 @@ async function saveEditing() {
 
   manga.title = editTitle ? editTitle.value.trim() : manga.title;
   manga.otherTitles = editOther ? editOther.value.trim() : manga.otherTitles;
-  manga.mangaStatus = editMangaStatus ? editMangaStatus.value : manga.mangaStatus;
+
+  // Handle manga status with chapter number for Completed/Stopped
+  let mangaStatusVal = editMangaStatus ? editMangaStatus.value : manga.mangaStatus;
+  if (mangaStatusVal === 'Completed' || mangaStatusVal === 'Stopped') {
+    const chapInput = document.getElementById('detail-edit-manga-status-chapter');
+    const chap = chapInput ? chapInput.value.trim() : '';
+    if (chap) mangaStatusVal = `${mangaStatusVal} (at chapter ${chap})`;
+  }
+  manga.mangaStatus = mangaStatusVal;
 
   // Handle my status with chapter number
   let myStatusVal = editMyStatusSelect ? editMyStatusSelect.value : manga.myStatus;
