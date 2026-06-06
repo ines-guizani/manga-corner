@@ -1097,6 +1097,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 }
 .detail-badge.ongoing { background: rgba(240, 184, 114, 0.15); color: #b88830; }
 .detail-badge.completed { background: rgba(108, 201, 160, 0.15); color: #3a9e70; }
+.detail-badge.stopped { background: rgba(224, 112, 112, 0.15); color: #c05050; }
 .detail-badge.my-completed { background: rgba(108, 201, 160, 0.15); color: #3a9e70; }
 .detail-badge.my-dropped { background: rgba(224, 112, 112, 0.15); color: #c05050; }
 .detail-badge.my-inchapter { background: rgba(100, 180, 220, 0.15); color: #4080a0; }
@@ -1440,6 +1441,15 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+.quick-chapter-controls {
+  background: var(--muted);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.quick-chapter-controls .field-label {
+  margin-bottom: 0.5rem;
 }
 .chapter-btn {
   width: 32px;
