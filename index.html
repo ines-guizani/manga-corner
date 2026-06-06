@@ -7,7 +7,6 @@
   <link rel="icon" type="image/png" href="mascot.png">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-<base target="_blank">
 </head>
 <body>
 
@@ -215,7 +214,16 @@
               <select id="manga-status" class="input">
                 <option value="Ongoing">Ongoing</option>
                 <option value="Completed">Completed</option>
+                <option value="Stopped">Stopped</option>
               </select>
+            </div>
+            <div class="field hidden" id="manga-status-chapter-field">
+              <label class="field-label">At chapter</label>
+              <div class="chapter-controls">
+                <button type="button" class="chapter-btn" id="manga-status-chapter-minus">&#8722;</button>
+                <input type="number" id="manga-status-chapter" class="input chapter-input" min="1" placeholder="Chapter" style="text-align:center;flex:1;">
+                <button type="button" class="chapter-btn" id="manga-status-chapter-plus">+</button>
+              </div>
             </div>
             <div class="field">
               <label class="field-label">My Status</label>
@@ -444,7 +452,19 @@
               <p class="detail-other" id="detail-view-other"></p>
               <div class="detail-badges" id="detail-view-badges"></div>
               <div class="detail-rating" id="detail-view-rating"></div>
-          <div class="detail-genres" id="detail-view-genres"></div>
+              <div class="detail-genres" id="detail-view-genres"></div>
+
+              <!-- Quick Chapter Controls in View Mode -->
+              <div class="quick-chapter-controls" id="quick-chapter-controls" style="display:none;margin-bottom:1rem;">
+                <label class="field-label">Quick Update Chapter</label>
+                <div class="chapter-controls">
+                  <button type="button" class="chapter-btn" id="quick-chapter-minus">&#8722;</button>
+                  <input type="number" id="quick-chapter-input" class="input chapter-input" min="1" style="text-align:center;flex:1;">
+                  <button type="button" class="chapter-btn" id="quick-chapter-plus">+</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="quick-chapter-save">Save</button>
+                </div>
+              </div>
+
               <div class="detail-summary-box" id="detail-view-summary"></div>
             </div>
 
@@ -464,7 +484,16 @@
                   <select id="detail-edit-manga-status" class="input">
                     <option value="Ongoing">Ongoing</option>
                     <option value="Completed">Completed</option>
+                    <option value="Stopped">Stopped</option>
                   </select>
+                </div>
+                <div class="field hidden" id="detail-edit-manga-status-chapter-field">
+                  <label class="field-label">At chapter</label>
+                  <div class="chapter-controls">
+                    <button type="button" class="chapter-btn" id="detail-manga-status-chapter-minus">&#8722;</button>
+                    <input type="number" id="detail-edit-manga-status-chapter" class="input chapter-input" min="1" placeholder="Chapter" style="text-align:center;flex:1;">
+                    <button type="button" class="chapter-btn" id="detail-manga-status-chapter-plus">+</button>
+                  </div>
                 </div>
                 <div class="field">
                   <label class="field-label">My Status</label>
@@ -544,7 +573,7 @@
                       </div>
 
           <div class="tab-content active" id="detail-tab-chapters">
-            <div class="edit-row hidden" id="detail-chapter-edit-row">
+            <div class="edit-row" id="detail-chapter-edit-row">
               <input type="number" id="detail-chapter-num" class="input input-sm" min="1" placeholder="Chapter #">
               <input type="text" id="detail-chapter-reason" class="input" placeholder="Why do you love this chapter?">
               <button type="button" id="detail-add-chapter-btn" class="btn btn-primary btn-sm">Add</button>
@@ -553,7 +582,7 @@
           </div>
 
           <div class="tab-content hidden" id="detail-tab-photos">
-            <div class="upload-area hidden" id="detail-photo-upload">
+            <div class="upload-area" id="detail-photo-upload">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity="0.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               <span class="hint-text">Click to upload photos</span>
             </div>
