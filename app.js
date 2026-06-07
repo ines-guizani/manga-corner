@@ -142,6 +142,9 @@ async function loadAppData() {
     // Always save merged genres back to cloud
     await saveGenresToCloud(state.genres);
     await migrateLocalStorageToCloud();
+
+    // Migrate existing manga to new format (adds missing fields like rating, year, etc.)
+    await migrateExistingMangasToNewFormat();
   } catch (e) {
     console.error("Cloud load failed:", e);
     state.mangas = loadFromStorage('mangas_v2', []);
@@ -260,6 +263,76 @@ async function migrateLocalStorageToCloud() {
     }
   }
   localStorage.setItem('mangaCorner_migrated_to_cloud', 'true');
+}
+
+// ===== MIGRATE EXISTING MANGA TO NEW FORMAT =====
+async function migrateExistingMangasToNewFormat() {
+  // Check if already migrated
+  if (localStorage.getItem('mangaCorner_migrated_v3')) return;
+
+  let migratedCount = 0;
+  for (const manga of state.mangas) {
+    let needsUpdate = false;
+
+    // Add rating if missing
+    if (manga.rating === undefined || manga.rating === null) {
+      manga.rating = 0;
+      needsUpdate = true;
+    }
+
+    // Add year if missing
+    if (manga.year === undefined || manga.year === null) {
+      manga.year = '';
+      needsUpdate = true;
+    }
+
+    // Ensure mangaStatus is a string (not undefined)
+    if (!manga.mangaStatus) {
+      manga.mangaStatus = 'Ongoing';
+      needsUpdate = true;
+    }
+
+    // Ensure myStatus is a string
+    if (!manga.myStatus) {
+      manga.myStatus = "Didn't start yet";
+      needsUpdate = true;
+    }
+
+    // Ensure genre is an array
+    if (!manga.genre || !Array.isArray(manga.genre)) {
+      manga.genre = [];
+      needsUpdate = true;
+    }
+
+    // Ensure favoriteChapters is an array
+    if (!manga.favoriteChapters || !Array.isArray(manga.favoriteChapters)) {
+      manga.favoriteChapters = [];
+      needsUpdate = true;
+    }
+
+    // Ensure favoritePhotos is an array
+    if (!manga.favoritePhotos || !Array.isArray(manga.favoritePhotos)) {
+      manga.favoritePhotos = [];
+      needsUpdate = true;
+    }
+
+    // Ensure createdAt exists
+    if (!manga.createdAt) {
+      manga.createdAt = new Date().toISOString();
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      await saveMangaToCloud(manga);
+      migratedCount++;
+    }
+  }
+
+  if (migratedCount > 0) {
+    showToast(`Updated ${migratedCount} manga to new format! ✨`);
+  }
+
+  localStorage.setItem('mangaCorner_migrated_v3', 'true');
 }
 
 // ===== REAL-TIME SYNC =====
