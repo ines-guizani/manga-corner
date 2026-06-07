@@ -578,54 +578,83 @@ function deleteGenre(genre) {
 function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
   return new Promise((resolve) => {
     const img = new Image();
+
     img.onload = function() {
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height *= maxWidth / width;
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width *= maxHeight / height;
-          height = maxHeight;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      // Fill white background first (for images with transparency)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Detect original format from base64 string
-      const isPNG = base64Str.includes('image/png');
-      const isWebP = base64Str.includes('image/webp');
-      const isGIF = base64Str.includes('image/gif');
-
-      let dataURL;
       try {
+        let width = img.width;
+        let height = img.height;
+
+        // Only resize if image is larger than max dimensions
+        if (width <= maxWidth && height <= maxHeight) {
+          resolve(base64Str);
+          return;
+        }
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round(height * maxWidth / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round(width * maxHeight / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // For JPEG images, fill white background first
+        const isJPEG = base64Str.includes('image/jpeg') || base64Str.includes('image/jpg');
+        if (isJPEG) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Detect original format from base64 string
+        const isPNG = base64Str.includes('image/png');
+        const isWebP = base64Str.includes('image/webp');
+        const isGIF = base64Str.includes('image/gif');
+
+        let dataURL;
         if (isPNG) {
           dataURL = canvas.toDataURL('image/png');
         } else if (isWebP) {
-          try { dataURL = canvas.toDataURL('image/webp', quality); }
-          catch (e) { dataURL = canvas.toDataURL('image/png'); }
+          try { 
+            dataURL = canvas.toDataURL('image/webp', quality); 
+          } catch (e) { 
+            dataURL = canvas.toDataURL('image/png'); 
+          }
         } else if (isGIF) {
           dataURL = canvas.toDataURL('image/png');
         } else {
+          // Default to JPEG for everything else
           dataURL = canvas.toDataURL('image/jpeg', quality);
         }
-      } catch (e) {
-        dataURL = canvas.toDataURL('image/png');
+
+        // Verify the resized image is valid by checking size
+        if (dataURL.length < 100) {
+          console.error('Resized image too small, using original');
+          resolve(base64Str);
+        } else {
+          resolve(dataURL);
+        }
+      } catch (err) {
+        console.error('Resize error:', err);
+        resolve(base64Str);
       }
-      resolve(dataURL);
     };
-    img.onerror = () => resolve(base64Str);
+
+    img.onerror = function() {
+      console.error('Image load error, returning original');
+      resolve(base64Str);
+    };
+
     img.src = base64Str;
   });
 }
@@ -636,10 +665,16 @@ async function fileToBase64(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const original = e.target.result;
-      // Always resize PNG and WebP (they can be large), and any file > 500KB
-      if (file.size > 500 * 1024 || file.type === 'image/png' || file.type === 'image/webp') {
-        const resized = await resizeImage(original, 1200, 1200, 0.85);
-        resolve(resized);
+      // Only resize if file is larger than 1MB
+      // For PNG/WebP, we also check if resize is needed inside resizeImage
+      if (file.size > 1024 * 1024) {
+        try {
+          const resized = await resizeImage(original, 1200, 1200, 0.85);
+          resolve(resized);
+        } catch (err) {
+          console.error('Resize failed, using original:', err);
+          resolve(original);
+        }
       } else {
         resolve(original);
       }
@@ -716,7 +751,7 @@ function setupAddPage() {
 
   document.getElementById('manga-status-chapter-minus').addEventListener('click', () => {
     const val = parseInt(mangaStatusChapterInput.value) || 1;
-    if (val > 1) mangaStatusChapterInput.value = val - 1;
+    if (val > 0) mangaStatusChapterInput.value = val - 1;
   });
 
   document.getElementById('manga-status-chapter-plus').addEventListener('click', () => {
@@ -774,8 +809,17 @@ function setupAddPage() {
       const chap = document.getElementById('dropped-chapter').value.trim();
       if (chap) myStatusVal = `Dropped (at chapter ${chap})`;
     } else if (myStatusVal === 'In Chapter') {
-      const chap = document.getElementById('current-chapter').value.trim();
-      if (chap) myStatusVal = `In Chapter ${chap}`;
+      let chap = document.getElementById('current-chapter').value.trim();
+      if (chap) {
+        let chapNum = parseInt(chap);
+        const mangaStatusChap = document.getElementById('manga-status-chapter').value.trim();
+        if (mangaStatusChap) {
+          const maxChap = parseInt(mangaStatusChap);
+          chapNum = Math.min(chapNum, maxChap);
+          chapNum = Math.max(0, chapNum);
+        }
+        myStatusVal = `In Chapter ${chapNum}`;
+      }
     }
 
     let mangaStatusVal = document.getElementById('manga-status').value;
@@ -1337,7 +1381,7 @@ function setupDetailPage() {
   const chapterPlus = document.getElementById('detail-chapter-plus');
   if (chapterMinus) {
     chapterMinus.addEventListener('click', () => {
-      if (state.detailEdit.currentChapter > 1) {
+      if (state.detailEdit.currentChapter > 0) {
         state.detailEdit.currentChapter--;
         document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
       }
@@ -1345,6 +1389,12 @@ function setupDetailPage() {
   }
   if (chapterPlus) {
     chapterPlus.addEventListener('click', () => {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      const maxChapter = getMaxChapterFromMangaStatus(manga?.mangaStatus);
+      if (maxChapter !== null && state.detailEdit.currentChapter >= maxChapter) {
+        showToast(`Cannot exceed manga's max chapter (${maxChapter})! ⚠️`, 'error');
+        return;
+      }
       state.detailEdit.currentChapter++;
       document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
     });
@@ -1381,7 +1431,7 @@ function setupDetailPage() {
   if (detailMangaStatusChapterMinus) {
     detailMangaStatusChapterMinus.addEventListener('click', () => {
       const val = parseInt(detailMangaStatusChapterInput.value) || 1;
-      if (val > 1) detailMangaStatusChapterInput.value = val - 1;
+      if (val > 0) detailMangaStatusChapterInput.value = val - 1;
     });
   }
   if (detailMangaStatusChapterPlus) {
@@ -1400,25 +1450,44 @@ function setupDetailPage() {
   if (quickChapterMinus) {
     quickChapterMinus.addEventListener('click', () => {
       const val = parseInt(quickChapterInput.value) || 1;
-      if (val > 1) quickChapterInput.value = val - 1;
+      if (val > 0) quickChapterInput.value = val - 1;
     });
   }
   if (quickChapterPlus) {
     quickChapterPlus.addEventListener('click', () => {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
       const val = parseInt(quickChapterInput.value) || 0;
+      const maxChapter = getMaxChapterFromMangaStatus(manga?.mangaStatus);
+      if (maxChapter !== null && val >= maxChapter) {
+        showToast(`Cannot exceed manga's max chapter (${maxChapter})! ⚠️`, 'error');
+        return;
+      }
       quickChapterInput.value = val + 1;
+    });
+  }
+  if (quickChapterInput) {
+    quickChapterInput.addEventListener('change', () => {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      const val = parseInt(quickChapterInput.value) || 0;
+      const maxChapter = getMaxChapterFromMangaStatus(manga?.mangaStatus);
+      if (maxChapter !== null && val > maxChapter) {
+        quickChapterInput.value = maxChapter;
+        showToast(`Capped at manga's max chapter (${maxChapter})`, 'error');
+      }
+      if (val < 0) quickChapterInput.value = 0;
     });
   }
   if (quickChapterSave) {
     quickChapterSave.addEventListener('click', async () => {
       const manga = state.mangas.find(m => m.id === state.selectedMangaId);
       if (!manga || !quickChapterInput.value) return;
-      const chapterNum = parseInt(quickChapterInput.value);
-      if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
-        manga.myStatus = `In Chapter ${chapterNum}`;
-      } else {
-        manga.myStatus = `In Chapter ${chapterNum}`;
+      let chapterNum = parseInt(quickChapterInput.value);
+      const maxChapter = getMaxChapterFromMangaStatus(manga.mangaStatus);
+      if (maxChapter !== null) {
+        chapterNum = Math.min(chapterNum, maxChapter);
+        chapterNum = Math.max(0, chapterNum);
       }
+      manga.myStatus = `In Chapter ${chapterNum}`;
       await saveMangaToCloud(manga);
       showToast(`Updated to chapter ${chapterNum}! 📖`);
       renderDetail();
@@ -1579,7 +1648,15 @@ function renderDetail() {
       quickChapterControls.style.display = isInChapter ? 'block' : 'none';
       if (isInChapter) {
         const match = manga.myStatus.match(/In Chapter (\d+)/);
-        quickChapterInput.value = match ? parseInt(match[1]) : 1;
+        quickChapterInput.value = match ? parseInt(match[1]) : 0;
+      }
+      // Show max chapter hint if available
+      const maxChapter = getMaxChapterFromMangaStatus(manga.mangaStatus);
+      const label = quickChapterControls.querySelector('.field-label');
+      if (label && maxChapter !== null) {
+        label.textContent = `Quick Update Chapter (0 - ${maxChapter})`;
+      } else if (label) {
+        label.textContent = 'Quick Update Chapter';
       }
     }
 
@@ -1699,7 +1776,7 @@ function startEditing() {
   state.showDetailGenreManager = false;
 
   // Parse current chapter from my status
-  let currentChapter = 1;
+  let currentChapter = 0;
   if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
     const match = manga.myStatus.match(/In Chapter (\d+)/);
     if (match) currentChapter = parseInt(match[1]);
@@ -1760,7 +1837,13 @@ async function saveEditing() {
   // Handle my status with chapter number
   let myStatusVal = editMyStatusSelect ? editMyStatusSelect.value : manga.myStatus;
   if (myStatusVal === 'In Chapter') {
-    myStatusVal = `In Chapter ${state.detailEdit.currentChapter}`;
+    let chapterNum = state.detailEdit.currentChapter;
+    const maxChapter = getMaxChapterFromMangaStatus(manga.mangaStatus);
+    if (maxChapter !== null) {
+      chapterNum = Math.min(chapterNum, maxChapter);
+      chapterNum = Math.max(0, chapterNum);
+    }
+    myStatusVal = `In Chapter ${chapterNum}`;
   }
   manga.myStatus = myStatusVal;
 
@@ -1806,6 +1889,13 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Extract max chapter from manga status like "Completed (at chapter 100)"
+function getMaxChapterFromMangaStatus(mangaStatus) {
+  if (!mangaStatus) return null;
+  const match = mangaStatus.match(/at chapter (\d+)/);
+  return match ? parseInt(match[1]) : null;
 }
 
 // ===== START =====
