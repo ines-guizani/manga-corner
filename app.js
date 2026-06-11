@@ -32,11 +32,7 @@ const provider = new GoogleAuthProvider();
 const MANGAS_COL = collection(db, "mangas");
 
 // ===== CONFIG =====
-const DEFAULT_GENRES = [
-  'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy',
-  'Horror', 'Isekai', 'Mystery', 'Romance', 'Sci-Fi',
-  'Slice of Life', 'Sports', 'Supernatural', 'Thriller'
-];
+const DEFAULT_GENRES = []; // No default genres - only use genres from existing manga
 const THEME_KEY = 'mangaCorner_theme';
 const ITEMS_PER_PAGE = 20;
 
@@ -133,11 +129,9 @@ async function loadAppData() {
 
     if (cloudGenres && cloudGenres.length > 0) {
       cloudGenres.forEach(g => mangaGenres.add(g));
-      state.genres = Array.from(mangaGenres).sort();
-    } else {
-      DEFAULT_GENRES.forEach(g => mangaGenres.add(g));
-      state.genres = Array.from(mangaGenres).sort();
     }
+    // Only use genres found in existing manga + cloud genres (no defaults)
+    state.genres = Array.from(mangaGenres).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
     // Always save merged genres back to cloud
     await saveGenresToCloud(state.genres);
@@ -863,7 +857,24 @@ function setupAddPage() {
   photoInput.addEventListener('change', async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    const dataUrls = await Promise.all(files.map(fileToBase64));
+
+    // Process files sequentially to avoid memory/canvas issues
+    const dataUrls = [];
+    for (const file of files) {
+      try {
+        const dataUrl = await fileToBase64(file);
+        if (dataUrl) dataUrls.push(dataUrl);
+      } catch (err) {
+        console.error('Failed to process file:', file.name, err);
+      }
+    }
+
+    if (dataUrls.length === 0) {
+      showToast('Failed to process photos. Try fewer at a time.', 'error');
+      photoInput.value = '';
+      return;
+    }
+
     state.addForm.photos.push(...dataUrls);
     renderPhotos('photo-grid', state.addForm.photos, true);
     updateTabCount('tab-count-photos', state.addForm.photos.length);
@@ -875,6 +886,15 @@ function setupAddPage() {
     e.preventDefault();
     const title = document.getElementById('title').value.trim();
     if (!title) { alert('Please enter a title!'); return; }
+
+    // Check for duplicate title
+    const existingManga = state.mangas.find(m => 
+      m.title.toLowerCase().trim() === title.toLowerCase().trim()
+    );
+    if (existingManga) {
+      const confirmed = confirm(`A manga titled "${existingManga.title}" already exists in your collection. Do you still want to add it?`);
+      if (!confirmed) return;
+    }
 
     const myStatusEl = document.getElementById('my-status');
     let myStatusVal = myStatusEl.value;
@@ -1171,7 +1191,7 @@ function getFilteredAndSortedMangas() {
       (m.otherTitles && m.otherTitles.toLowerCase().includes(search.toLowerCase()));
     const matchMangaStatus = mangaStatus === 'All' || (m.mangaStatus && m.mangaStatus.startsWith(mangaStatus));
     const matchMyStatus = myStatus === 'All' || (m.myStatus && m.myStatus.startsWith(myStatus));
-    const matchGenre = genres.length === 0 || genres.some(g => m.genre && m.genre.includes(g));
+    const matchGenre = genres.length === 0 || genres.every(g => m.genre && m.genre.includes(g));
     const matchExclude = excludeGenres.length === 0 || !excludeGenres.some(g => m.genre && m.genre.includes(g));
     return matchSearch && matchMangaStatus && matchMyStatus && matchGenre && matchExclude;
   });
@@ -1612,7 +1632,23 @@ function setupDetailPage() {
     detailPhotoInput.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
-      const dataUrls = await Promise.all(files.map(fileToBase64));
+
+      // Process files sequentially to avoid memory/canvas issues with many files
+      const dataUrls = [];
+      for (const file of files) {
+        try {
+          const dataUrl = await fileToBase64(file);
+          if (dataUrl) dataUrls.push(dataUrl);
+        } catch (err) {
+          console.error('Failed to process file:', file.name, err);
+        }
+      }
+
+      if (dataUrls.length === 0) {
+        showToast('Failed to process photos. Try fewer at a time.', 'error');
+        detailPhotoInput.value = '';
+        return;
+      }
 
       if (state.editMode) {
         state.detailEdit.photos.push(...dataUrls);
@@ -1627,7 +1663,7 @@ function setupDetailPage() {
           await saveMangaToCloud(manga);
           renderPhotos('detail-photo-grid', manga.favoritePhotos, false);
           updateTabCount('detail-tab-count-photos', manga.favoritePhotos.length);
-          showToast(`Added ${files.length} photo${files.length > 1 ? 's' : ''}! 📸`);
+          showToast(`Added ${dataUrls.length} photo${dataUrls.length > 1 ? 's' : ''}! 📸`);
         }
       }
       detailPhotoInput.value = '';
