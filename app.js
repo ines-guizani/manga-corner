@@ -887,12 +887,10 @@ function setupAddPage() {
     const title = document.getElementById('title').value.trim();
     if (!title) { alert('Please enter a title!'); return; }
 
-    // Check for duplicate title
-    const existingManga = state.mangas.find(m => 
-      m.title.toLowerCase().trim() === title.toLowerCase().trim()
-    );
-    if (existingManga) {
-      const confirmed = confirm(`A manga titled "${existingManga.title}" already exists in your collection. Do you still want to add it?`);
+    // Check for duplicates (title + alternative titles)
+    const dupCheck = checkDuplicate(title, document.getElementById('other-titles').value);
+    if (dupCheck.duplicate) {
+      const confirmed = confirm(`A manga titled "${dupCheck.manga.title}" already exists in your collection (matched by ${dupCheck.matchType}). Do you still want to add it?`);
       if (!confirmed) return;
     }
 
@@ -1493,13 +1491,34 @@ function setupDetailPage() {
     });
   }
 
+  // Dropped chapter controls
+  const droppedMinus = document.getElementById('detail-dropped-chapter-minus');
+  const droppedPlus = document.getElementById('detail-dropped-chapter-plus');
+  const droppedInput = document.getElementById('detail-edit-dropped-chapter');
+  if (droppedMinus) {
+    droppedMinus.addEventListener('click', () => {
+      const val = parseInt(droppedInput.value) || 1;
+      if (val > 0) droppedInput.value = val - 1;
+    });
+  }
+  if (droppedPlus) {
+    droppedPlus.addEventListener('click', () => {
+      const val = parseInt(droppedInput.value) || 0;
+      droppedInput.value = val + 1;
+    });
+  }
+
   // My status select change -> show/hide chapter controls
   const myStatusSelect = document.getElementById('detail-edit-my-status-select');
   if (myStatusSelect) {
     myStatusSelect.addEventListener('change', () => {
       const chapterControls = document.getElementById('detail-edit-chapter-controls');
+      const droppedChapterField = document.getElementById('detail-edit-dropped-chapter-field');
       if (chapterControls) {
         chapterControls.classList.toggle('hidden', myStatusSelect.value !== 'In Chapter');
+      }
+      if (droppedChapterField) {
+        droppedChapterField.classList.toggle('hidden', myStatusSelect.value !== 'Dropped');
       }
     });
   }
@@ -1583,6 +1602,37 @@ function setupDetailPage() {
       manga.myStatus = `In Chapter ${chapterNum}`;
       await saveMangaToCloud(manga);
       showToast(`Updated to chapter ${chapterNum}! 📖`);
+      renderDetail();
+    });
+  }
+
+  // Quick dropped chapter controls
+  const quickDroppedMinus = document.getElementById('quick-dropped-minus');
+  const quickDroppedPlus = document.getElementById('quick-dropped-plus');
+  const quickDroppedInput = document.getElementById('quick-dropped-input');
+  const quickDroppedSave = document.getElementById('quick-dropped-save');
+
+  if (quickDroppedMinus) {
+    quickDroppedMinus.addEventListener('click', () => {
+      const val = parseInt(quickDroppedInput.value) || 1;
+      if (val > 0) quickDroppedInput.value = val - 1;
+    });
+  }
+  if (quickDroppedPlus) {
+    quickDroppedPlus.addEventListener('click', () => {
+      const val = parseInt(quickDroppedInput.value) || 0;
+      quickDroppedInput.value = val + 1;
+    });
+  }
+  if (quickDroppedSave) {
+    quickDroppedSave.addEventListener('click', async () => {
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      if (!manga || !quickDroppedInput.value) return;
+      let chapterNum = parseInt(quickDroppedInput.value);
+      chapterNum = Math.max(0, chapterNum);
+      manga.myStatus = `Dropped (at chapter ${chapterNum})`;
+      await saveMangaToCloud(manga);
+      showToast(`Updated dropped at chapter ${chapterNum}! 📖`);
       renderDetail();
     });
   }
@@ -1729,8 +1779,15 @@ function renderDetail() {
 
     const otherEl = document.getElementById('detail-view-other');
     if (otherEl) {
-      if (manga.otherTitles) { otherEl.textContent = manga.otherTitles; otherEl.style.display = 'block'; }
-      else { otherEl.style.display = 'none'; }
+      if (manga.otherTitles) {
+        const altTitles = autoSplitTitles(manga.otherTitles, manga.title);
+        if (altTitles.length > 0) {
+          otherEl.innerHTML = altTitles.map(t => `<span class="alt-title-tag">${escapeHtml(t)}</span>`).join('');
+          otherEl.style.display = 'flex';
+        } else {
+          otherEl.style.display = 'none';
+        }
+      } else { otherEl.style.display = 'none'; }
     }
 
     const myClass = manga.myStatus && manga.myStatus.startsWith('Completed') ? 'my-completed'
@@ -1752,6 +1809,9 @@ function renderDetail() {
     // View mode - setup quick chapter controls
     const quickChapterControls = document.getElementById('quick-chapter-controls');
     const quickChapterInput = document.getElementById('quick-chapter-input');
+    const quickDroppedControls = document.getElementById('quick-dropped-controls');
+    const quickDroppedInput = document.getElementById('quick-dropped-input');
+
     if (quickChapterControls && quickChapterInput) {
       const isInChapter = manga.myStatus && manga.myStatus.startsWith('In Chapter');
       quickChapterControls.style.display = isInChapter ? 'block' : 'none';
@@ -1766,6 +1826,15 @@ function renderDetail() {
         label.textContent = `Quick Update Chapter (0 - ${maxChapter})`;
       } else if (label) {
         label.textContent = 'Quick Update Chapter';
+      }
+    }
+
+    if (quickDroppedControls && quickDroppedInput) {
+      const isDropped = manga.myStatus && manga.myStatus.startsWith('Dropped');
+      quickDroppedControls.style.display = isDropped ? 'block' : 'none';
+      if (isDropped) {
+        const match = manga.myStatus.match(/Dropped \(at chapter (\d+)\)/);
+        quickDroppedInput.value = match ? parseInt(match[1]) : 0;
       }
     }
 
@@ -1833,6 +1902,7 @@ function renderDetail() {
 
     // Setup chapter controls visibility based on status
     const chapterControls = document.getElementById('detail-edit-chapter-controls');
+    const droppedChapterField = document.getElementById('detail-edit-dropped-chapter-field');
     if (chapterControls) {
       const isInChapter = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('In Chapter');
       chapterControls.classList.toggle('hidden', !isInChapter);
@@ -1840,6 +1910,13 @@ function renderDetail() {
         const match = state.detailEdit.myStatus.match(/In Chapter (\d+)/);
         state.detailEdit.currentChapter = match ? parseInt(match[1]) : 1;
         document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
+      }
+    }
+    if (droppedChapterField) {
+      const isDropped = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('Dropped');
+      droppedChapterField.classList.toggle('hidden', !isDropped);
+      if (isDropped && state.detailEdit.droppedChapter) {
+        document.getElementById('detail-edit-dropped-chapter').value = state.detailEdit.droppedChapter;
       }
     }
 
@@ -1902,9 +1979,16 @@ function startEditing() {
     }
   }
 
+  // Parse dropped chapter from my status
+  let droppedChapter = '';
+  if (manga.myStatus && manga.myStatus.startsWith('Dropped') && manga.myStatus.includes('(at chapter')) {
+    const match = manga.myStatus.match(/Dropped \(at chapter (\d+)\)/);
+    if (match) droppedChapter = match[1];
+  }
+
   state.detailEdit = {
     title: manga.title, 
-    otherTitles: manga.otherTitles || '',
+    otherTitles: formatTitlesForEdit(manga.otherTitles || ''),
     mangaStatus: mangaStatusClean, 
     myStatus: manga.myStatus,
     summary: manga.summary || '', 
@@ -1913,6 +1997,7 @@ function startEditing() {
     year: manga.year || '',
     currentChapter: currentChapter,
     mangaStatusChapter: mangaStatusChapter,
+    droppedChapter: droppedChapter,
     chapters: [...(manga.favoriteChapters || [])],
     photos: [...(manga.favoritePhotos || [])],
     selectedGenres: [...(manga.genre || [])],
@@ -1931,8 +2016,18 @@ async function saveEditing() {
   const editSummary = document.getElementById('detail-edit-summary');
   const editYear = document.getElementById('detail-edit-year');
 
-  manga.title = editTitle ? editTitle.value.trim() : manga.title;
-  manga.otherTitles = editOther ? editOther.value.trim() : manga.otherTitles;
+  const newTitle = editTitle ? editTitle.value.trim() : manga.title;
+  const newOtherTitles = editOther ? editOther.value.trim() : manga.otherTitles;
+
+  // Check for duplicates when editing (exclude current manga)
+  const dupCheck = checkDuplicate(newTitle, newOtherTitles, manga.id);
+  if (dupCheck.duplicate) {
+    const confirmed = confirm(`A manga titled "${dupCheck.manga.title}" already exists in your collection (matched by ${dupCheck.matchType}). Do you still want to save?`);
+    if (!confirmed) return;
+  }
+
+  manga.title = newTitle;
+  manga.otherTitles = newOtherTitles;
 
   // Handle manga status with chapter number for Completed/Stopped
   let mangaStatusVal = editMangaStatus ? editMangaStatus.value : manga.mangaStatus;
@@ -1953,6 +2048,10 @@ async function saveEditing() {
       chapterNum = Math.max(0, chapterNum);
     }
     myStatusVal = `In Chapter ${chapterNum}`;
+  } else if (myStatusVal === 'Dropped') {
+    const chapInput = document.getElementById('detail-edit-dropped-chapter');
+    const chap = chapInput ? chapInput.value.trim() : '';
+    if (chap) myStatusVal = `Dropped (at chapter ${chap})`;
   }
   manga.myStatus = myStatusVal;
 
@@ -1998,6 +2097,197 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+
+// ===== AUTO-SPLIT ALTERNATIVE TITLES =====
+function autoSplitTitles(text, mangaTitle = '') {
+  if (!text || !text.trim()) return [];
+
+  const trimmed = text.trim();
+
+  // If already has newlines, respect them
+  if (trimmed.includes('\n')) {
+    return trimmed.split('\n').map(t => t.trim()).filter(t => t.length > 0);
+  }
+
+  // If already has commas, split by commas
+  if (trimmed.includes(',')) {
+    return trimmed.split(',').map(t => t.trim()).filter(t => t.length > 0);
+  }
+
+  // Best-effort auto-split for space-separated blob
+  const titles = [];
+  let current = '';
+  const words = trimmed.split(/\s+/);
+
+  // Heuristic 1: Repeated prefix pattern (e.g., "Yona" appears multiple times)
+  if (mangaTitle) {
+    const titleWords = mangaTitle.trim().split(/\s+/);
+    const firstWord = titleWords[0];
+    if (firstWord && firstWord.length > 2) {
+      // Find all positions where the first word of title appears again
+      const positions = [];
+      for (let i = 1; i < words.length; i++) {
+        if (words[i].toLowerCase() === firstWord.toLowerCase() ||
+            words[i].toLowerCase().startsWith(firstWord.toLowerCase())) {
+          positions.push(i);
+        }
+      }
+      if (positions.length > 0) {
+        let start = 0;
+        for (const pos of positions) {
+          const title = words.slice(start, pos).join(' ').trim();
+          if (title.length > 0) titles.push(title);
+          start = pos;
+        }
+        const lastTitle = words.slice(start).join(' ').trim();
+        if (lastTitle.length > 0) titles.push(lastTitle);
+        if (titles.length > 1) return titles;
+      }
+    }
+  }
+
+  // Heuristic 2: Language/script boundary detection
+  function getScript(char) {
+    const code = char.charCodeAt(0);
+    if (code >= 0x0041 && code <= 0x007A) return 'latin'; // Basic Latin
+    if (code >= 0x00C0 && code <= 0x024F) return 'latin-ext'; // Latin Extended
+    if (code >= 0x0370 && code <= 0x03FF) return 'greek';
+    if (code >= 0x0400 && code <= 0x04FF) return 'cyrillic';
+    if (code >= 0x0590 && code <= 0x05FF) return 'hebrew';
+    if (code >= 0x0600 && code <= 0x06FF) return 'arabic';
+    if (code >= 0x0900 && code <= 0x097F) return 'devanagari';
+    if (code >= 0x0E00 && code <= 0x0E7F) return 'thai';
+    if (code >= 0x3040 && code <= 0x309F) return 'hiragana';
+    if (code >= 0x30A0 && code <= 0x30FF) return 'katakana';
+    if (code >= 0x4E00 && code <= 0x9FFF) return 'cjk';
+    if (code >= 0xAC00 && code <= 0xD7AF) return 'korean';
+    if (code >= 0x10A0 && code <= 0x10FF) return 'georgian';
+    if (code >= 0x0400 && code <= 0x04FF) return 'cyrillic';
+    return 'other';
+  }
+
+  let lastScript = null;
+  let splitPoints = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (word.length === 0) continue;
+    const firstChar = word.charAt(0);
+    const script = getScript(firstChar);
+
+    if (lastScript && lastScript !== 'latin' && lastScript !== 'latin-ext' && 
+        script !== 'latin' && script !== 'latin-ext' && 
+        lastScript !== script) {
+      // Script switch detected
+      splitPoints.push(i);
+    }
+    lastScript = script;
+  }
+
+  if (splitPoints.length > 0) {
+    let start = 0;
+    for (const pos of splitPoints) {
+      const title = words.slice(start, pos).join(' ').trim();
+      if (title.length > 0) titles.push(title);
+      start = pos;
+    }
+    const lastTitle = words.slice(start).join(' ').trim();
+    if (lastTitle.length > 0) titles.push(lastTitle);
+    if (titles.length > 1) return titles;
+  }
+
+  // Heuristic 3: Capitalization pattern
+  // Look for capital letter after lowercase words (new title start)
+  splitPoints = [];
+  let lowercaseCount = 0;
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const prevWord = words[i - 1];
+
+    if (word.length > 0 && word[0] === word[0].toUpperCase() && 
+        prevWord && prevWord.length > 0 && 
+        prevWord[0] === prevWord[0].toLowerCase() &&
+        !prevWord.match(/^(the|a|an|of|in|on|at|to|for|with|and|or|but|from|by)$/i)) {
+      lowercaseCount++;
+      if (lowercaseCount >= 2) {
+        splitPoints.push(i);
+        lowercaseCount = 0;
+      }
+    } else {
+      lowercaseCount = 0;
+    }
+  }
+
+  if (splitPoints.length > 0) {
+    titles.length = 0;
+    let start = 0;
+    for (const pos of splitPoints) {
+      const title = words.slice(start, pos).join(' ').trim();
+      if (title.length > 0) titles.push(title);
+      start = pos;
+    }
+    const lastTitle = words.slice(start).join(' ').trim();
+    if (lastTitle.length > 0) titles.push(lastTitle);
+    if (titles.length > 1) return titles;
+  }
+
+  // Fallback: return as single title
+  return [trimmed];
+}
+
+function formatTitlesForDisplay(text, mangaTitle = '') {
+  const titles = autoSplitTitles(text, mangaTitle);
+  return titles;
+}
+
+function formatTitlesForEdit(text) {
+  const titles = autoSplitTitles(text);
+  return titles.join('\n');
+}
+
+function normalizeTitle(title) {
+  return title.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function checkDuplicate(title, otherTitles, excludeId = null) {
+  const normalizedTitle = normalizeTitle(title);
+  const altTitles = autoSplitTitles(otherTitles, title);
+  const normalizedAlts = altTitles.map(t => normalizeTitle(t));
+
+  for (const manga of state.mangas) {
+    if (excludeId && manga.id === excludeId) continue;
+
+    // Check main title
+    if (normalizeTitle(manga.title) === normalizedTitle) {
+      return { duplicate: true, manga, matchType: 'title' };
+    }
+
+    // Check alternative titles of existing manga
+    const existingAlts = autoSplitTitles(manga.otherTitles || '', manga.title);
+    for (const alt of existingAlts) {
+      if (normalizeTitle(alt) === normalizedTitle) {
+        return { duplicate: true, manga, matchType: 'alternative title' };
+      }
+    }
+
+    // Check if any of our alternative titles match existing manga's main title
+    for (const ourAlt of normalizedAlts) {
+      if (normalizeTitle(manga.title) === ourAlt) {
+        return { duplicate: true, manga, matchType: 'alternative title matches existing' };
+      }
+      // Check if our alternative title matches existing alternative titles
+      for (const existingAlt of existingAlts) {
+        if (normalizeTitle(existingAlt) === ourAlt) {
+          return { duplicate: true, manga, matchType: 'alternative title' };
+        }
+      }
+    }
+  }
+
+  return { duplicate: false };
 }
 
 // Extract max chapter from manga status like "Completed (at chapter 100)"
