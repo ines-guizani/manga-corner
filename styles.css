@@ -1514,3 +1514,26 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 }
 .toast.success { border-color: var(--success); color: var(--success); }
 .toast.error { border-color: var(--danger); color: var(--danger); }
+/* ===== ALTERNATIVE TITLE TAGS ===== */
+.alt-title-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(212, 184, 224, 0.2);
+  color: #9060a0;
+  border: 1px solid rgba(212, 184, 224, 0.3);
+  white-space: nowrap;
+}
+[data-theme="dark"] .alt-title-tag {
+  background: rgba(184, 152, 200, 0.15);
+  color: #b898c8;
+  border-color: rgba(184, 152, 200, 0.25);
+}
+
+/* Dropped chapter field styling */
+#detail-edit-dropped-chapter-field .chapter-controls {
+  margin-top: 0;
+}
