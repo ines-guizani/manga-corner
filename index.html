@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 
@@ -184,7 +185,8 @@
 
           <div class="field">
             <label class="field-label">Other Titles</label>
-            <input type="text" id="other-titles" class="input" placeholder="Alternative or translated titles...">
+            <textarea id="other-titles" class="input textarea" rows="3" placeholder="Alternative or translated titles... (one per line)"></textarea>
+            <p class="hint-text">Enter one title per line for best display</p>
           </div>
 
           <div class="field">
@@ -451,7 +453,7 @@
             <!-- Readonly view -->
             <div class="detail-readonly" id="detail-readonly">
               <h1 class="detail-title" id="detail-view-title"></h1>
-              <p class="detail-other" id="detail-view-other"></p>
+              <div class="detail-other" id="detail-view-other" style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.75rem;"></div>
               <div class="detail-badges" id="detail-view-badges"></div>
               <div class="detail-rating" id="detail-view-rating"></div>
               <div class="detail-genres" id="detail-view-genres"></div>
@@ -467,6 +469,17 @@
                 </div>
               </div>
 
+              <!-- Quick Dropped Chapter Controls in View Mode -->
+              <div class="quick-chapter-controls" id="quick-dropped-controls" style="display:none;margin-bottom:1rem;">
+                <label class="field-label">Quick Update Dropped Chapter</label>
+                <div class="chapter-controls">
+                  <button type="button" class="chapter-btn" id="quick-dropped-minus">&#8722;</button>
+                  <input type="number" id="quick-dropped-input" class="input chapter-input" min="0" style="text-align:center;flex:1;">
+                  <button type="button" class="chapter-btn" id="quick-dropped-plus">+</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="quick-dropped-save">Save</button>
+                </div>
+              </div>
+
               <div class="detail-summary-box" id="detail-view-summary"></div>
             </div>
 
@@ -478,7 +491,8 @@
               </div>
               <div class="field">
                 <label class="field-label">Other Titles</label>
-                <input type="text" id="detail-edit-other" class="input">
+                <textarea id="detail-edit-other" class="input textarea" rows="3" placeholder="Alternative or translated titles... (one per line)"></textarea>
+                <p class="hint-text">Enter one title per line for best display</p>
               </div>
               <div class="row-2">
                 <div class="field">
@@ -512,6 +526,14 @@
                     <button type="button" class="chapter-btn" id="detail-chapter-minus" title="Decrease">&#8722;</button>
                     <span class="chapter-display" id="detail-chapter-display">1</span>
                     <button type="button" class="chapter-btn" id="detail-chapter-plus" title="Increase">+</button>
+                  </div>
+                </div>
+                <div class="field hidden" id="detail-edit-dropped-chapter-field">
+                  <label class="field-label">Dropped at chapter</label>
+                  <div class="chapter-controls">
+                    <button type="button" class="chapter-btn" id="detail-dropped-chapter-minus">&#8722;</button>
+                    <input type="number" id="detail-edit-dropped-chapter" class="input chapter-input" min="0" placeholder="Chapter" style="text-align:center;flex:1;">
+                    <button type="button" class="chapter-btn" id="detail-dropped-chapter-plus">+</button>
                   </div>
                 </div>
               </div>              <div class="field">
