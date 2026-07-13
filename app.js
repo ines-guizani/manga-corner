@@ -1900,7 +1900,18 @@ function renderDetail() {
     if (editSummary) editSummary.value = state.detailEdit.summary;
     if (editYear) editYear.value = state.detailEdit.year || '';
 
-    // Setup chapter controls visibility based on status
+    // Setup manga status chapter field visibility and value
+    const mangaStatusChapterField = document.getElementById('detail-edit-manga-status-chapter-field');
+    const mangaStatusChapterInput = document.getElementById('detail-edit-manga-status-chapter');
+    if (mangaStatusChapterField) {
+      const needsChapter = state.detailEdit.mangaStatus === 'Completed' || state.detailEdit.mangaStatus === 'Stopped';
+      mangaStatusChapterField.classList.toggle('hidden', !needsChapter);
+      if (mangaStatusChapterInput) {
+        mangaStatusChapterInput.value = needsChapter ? (state.detailEdit.mangaStatusChapter || '') : '';
+      }
+    }
+
+    // Setup my status chapter controls visibility based on status
     const chapterControls = document.getElementById('detail-edit-chapter-controls');
     const droppedChapterField = document.getElementById('detail-edit-dropped-chapter-field');
     if (chapterControls) {
@@ -1915,8 +1926,9 @@ function renderDetail() {
     if (droppedChapterField) {
       const isDropped = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('Dropped');
       droppedChapterField.classList.toggle('hidden', !isDropped);
-      if (isDropped && state.detailEdit.droppedChapter) {
-        document.getElementById('detail-edit-dropped-chapter').value = state.detailEdit.droppedChapter;
+      const droppedInput = document.getElementById('detail-edit-dropped-chapter');
+      if (droppedInput) {
+        droppedInput.value = isDropped ? (state.detailEdit.droppedChapter || '') : '';
       }
     }
 
@@ -1969,8 +1981,8 @@ function startEditing() {
   }
 
   // Parse manga status chapter
-  let mangaStatusChapter = 1;
-  let mangaStatusClean = manga.mangaStatus;
+  let mangaStatusChapter = '';
+  let mangaStatusClean = manga.mangaStatus || 'Ongoing';
   if (manga.mangaStatus && (manga.mangaStatus.includes('(at chapter') || manga.mangaStatus.includes('Completed (at chapter') || manga.mangaStatus.includes('Stopped (at chapter'))) {
     const match = manga.mangaStatus.match(/(Completed|Stopped) \(at chapter (\d+)\)/);
     if (match) {
