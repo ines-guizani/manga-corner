@@ -1915,16 +1915,14 @@ function renderDetail() {
     const chapterControls = document.getElementById('detail-edit-chapter-controls');
     const droppedChapterField = document.getElementById('detail-edit-dropped-chapter-field');
     if (chapterControls) {
-      const isInChapter = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('In Chapter');
+      const isInChapter = state.detailEdit.myStatus === 'In Chapter';
       chapterControls.classList.toggle('hidden', !isInChapter);
       if (isInChapter) {
-        const match = state.detailEdit.myStatus.match(/In Chapter (\d+)/);
-        state.detailEdit.currentChapter = match ? parseInt(match[1]) : 1;
         document.getElementById('detail-chapter-display').textContent = state.detailEdit.currentChapter;
       }
     }
     if (droppedChapterField) {
-      const isDropped = state.detailEdit.myStatus && state.detailEdit.myStatus.startsWith('Dropped');
+      const isDropped = state.detailEdit.myStatus === 'Dropped';
       droppedChapterField.classList.toggle('hidden', !isDropped);
       const droppedInput = document.getElementById('detail-edit-dropped-chapter');
       if (droppedInput) {
@@ -1998,11 +1996,21 @@ function startEditing() {
     if (match) droppedChapter = match[1];
   }
 
+  // Extract base myStatus for select (e.g., "In Chapter 520" -> "In Chapter")
+  let myStatusBase = manga.myStatus || "Didn't start yet";
+  if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) {
+    myStatusBase = 'In Chapter';
+  } else if (manga.myStatus && manga.myStatus.startsWith('Dropped')) {
+    myStatusBase = 'Dropped';
+  } else if (manga.myStatus && manga.myStatus.startsWith('Completed')) {
+    myStatusBase = 'Completed';
+  }
+
   state.detailEdit = {
     title: manga.title, 
     otherTitles: formatTitlesForEdit(manga.otherTitles || ''),
     mangaStatus: mangaStatusClean, 
-    myStatus: manga.myStatus,
+    myStatus: myStatusBase,
     summary: manga.summary || '', 
     cover: manga.cover || '',
     rating: manga.rating || 0, 
