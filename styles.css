@@ -1085,7 +1085,14 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 @media (min-width: 768px) { .detail-info { padding: 1.5rem; } }
 
 .detail-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
-.detail-other { font-size: 0.875rem; color: var(--muted-fg); margin-bottom: 0.75rem; }
+.detail-other {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted-fg);
+}
 .detail-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
 .detail-badge {
   display: inline-flex;
@@ -1525,12 +1532,15 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   background: rgba(212, 184, 224, 0.2);
   color: #9060a0;
   border: 1px solid rgba(212, 184, 224, 0.3);
-  white-space: nowrap;
+  word-break: break-word;
+  max-width: 100%;
 }
 [data-theme="dark"] .alt-title-tag {
   background: rgba(184, 152, 200, 0.15);
   color: #b898c8;
   border-color: rgba(184, 152, 200, 0.25);
+  word-break: break-word;
+  max-width: 100%;
 }
 
 /* Dropped chapter field styling */
