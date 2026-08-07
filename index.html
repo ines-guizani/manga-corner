@@ -82,6 +82,21 @@
       <a href="#" class="mobile-link active" data-link>Home</a>
       <a href="#add" class="mobile-link" data-link>Add Manga</a>
       <a href="#list" class="mobile-link" data-link>My List</a>
+      <div class="mobile-divider"></div>
+      <button class="mobile-link mobile-theme-toggle" id="mobile-theme-toggle">
+        <span class="theme-icon moon">&#127769;</span>
+        <span class="theme-icon sun">&#9728;&#65039;</span>
+        <span class="mobile-theme-label">Toggle dark mode</span>
+      </button>
+      <div class="mobile-divider"></div>
+      <div class="mobile-user">
+        <img id="mobile-user-avatar" style="display:none;width:32px;height:32px;border-radius:50%;border:2px solid var(--primary);" alt="You">
+        <span id="mobile-user-name" style="font-size:0.875rem;font-weight:700;color:var(--fg);flex:1;"></span>
+      </div>
+      <button class="mobile-link mobile-signout" id="mobile-signout-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign out
+      </button>
     </div>
   </header>
 
