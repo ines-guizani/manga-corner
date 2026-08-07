@@ -1580,3 +1580,40 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   color: var(--primary-fg);
   border-color: var(--primary);
 }
+
+/* ===== MOBILE MENU EXTRAS ===== */
+.mobile-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+.mobile-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.mobile-theme-toggle .moon { display: inline; }
+.mobile-theme-toggle .sun { display: none; }
+[data-theme="dark"] .mobile-theme-toggle .moon { display: none; }
+[data-theme="dark"] .mobile-theme-toggle .sun { display: inline; }
+.mobile-theme-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.mobile-user {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+}
+.mobile-signout {
+  color: var(--danger) !important;
+}
+.mobile-signout:hover {
+  background: rgba(224, 112, 112, 0.1) !important;
+}
