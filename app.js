@@ -52,6 +52,7 @@ let state = {
   currentUser: null,
   listPage: 1,
   sortBy: 'newest',
+  chapterSort: 'asc',
   lightbox: { open: false, photos: [], currentIndex: 0 },
 };
 
@@ -839,11 +840,37 @@ function setupAddPage() {
     const num = document.getElementById('chapter-num').value.trim();
     const reason = document.getElementById('chapter-reason').value.trim();
     if (!num || !reason) return;
-    state.addForm.chapters.push({ number: parseInt(num), reason });
+    const chapterNum = parseInt(num);
+
+    const validation = getMaxFavoriteChapterFromForm('add');
+    if (!validation.allowed) {
+      showToast(validation.reason, 'error');
+      return;
+    }
+    if (validation.max !== Infinity && chapterNum > validation.max) {
+      showToast(`Chapter ${chapterNum} exceeds your current progress (max: ${validation.max})! ⚠️`, 'error');
+      return;
+    }
+    if (isDuplicateChapter(state.addForm.chapters, chapterNum)) {
+      if (!confirm(`Chapter ${chapterNum} is already in your favorites. Add anyway?`)) return;
+    }
+
+    state.addForm.chapters.push({ number: chapterNum, reason });
     document.getElementById('chapter-num').value = '';
     document.getElementById('chapter-reason').value = '';
     renderChapters('chapters-list', state.addForm.chapters, true);
     updateTabCount('tab-count-chapters', state.addForm.chapters.length);
+  });
+
+
+  // Chapter sort controls
+  document.querySelectorAll('#add-chapter-sort-bar .sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#add-chapter-sort-bar .sort-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.chapterSort = btn.dataset.sort;
+      renderChapters('chapters-list', state.addForm.chapters, true);
+    });
   });
 
   // Photo upload - FIX: use proper event delegation
@@ -983,17 +1010,25 @@ function updateTabCount(id, count) {
 function renderChapters(containerId, chapters, editable) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  if (chapters.length === 0) {
+
+  // Sort chapters by number
+  const sorted = chapters.map((ch, idx) => ({ ...ch, originalIdx: idx }))
+    .sort((a, b) => {
+      return state.chapterSort === 'asc' ? a.number - b.number : b.number - a.number;
+    });
+
+  if (sorted.length === 0) {
     container.innerHTML = '<p class="empty-hint">No favorite chapters yet. Add some!</p>';
+    syncChapterSortButtons(containerId === 'chapters-list' ? 'add' : 'detail');
     return;
   }
-  container.innerHTML = chapters.map((ch, i) => `
+  container.innerHTML = sorted.map((ch) => `
     <div class="item-row">
       <div class="item-content">
         <span class="item-title">Chapter ${ch.number}</span>
         <p class="item-desc">${escapeHtml(ch.reason)}</p>
       </div>
-      <button class="item-delete" data-idx="${i}" title="Remove">&#10005;</button>
+      <button class="item-delete" data-idx="${ch.originalIdx}" title="Remove">&#10005;</button>
     </div>
   `).join('');
   container.querySelectorAll('.item-delete').forEach(btn => {
@@ -1016,6 +1051,7 @@ function renderChapters(containerId, chapters, editable) {
       }
     });
   });
+  syncChapterSortButtons(containerId === 'chapters-list' ? 'add' : 'detail');
 }
 
 function renderPhotos(containerId, photos, editable) {
@@ -1647,17 +1683,42 @@ function setupDetailPage() {
       const num = document.getElementById('detail-chapter-num').value.trim();
       const reason = document.getElementById('detail-chapter-reason').value.trim();
       if (!num || !reason) return;
+      const chapterNum = parseInt(num);
 
       if (state.editMode) {
-        state.detailEdit.chapters.push({ number: parseInt(num), reason });
+        const validation = getMaxFavoriteChapterFromForm('detail');
+        if (!validation.allowed) {
+          showToast(validation.reason, 'error');
+          return;
+        }
+        if (validation.max !== Infinity && chapterNum > validation.max) {
+          showToast(`Chapter ${chapterNum} exceeds your current progress (max: ${validation.max})! ⚠️`, 'error');
+          return;
+        }
+        if (isDuplicateChapter(state.detailEdit.chapters, chapterNum)) {
+          if (!confirm(`Chapter ${chapterNum} is already in your favorites. Add anyway?`)) return;
+        }
+        state.detailEdit.chapters.push({ number: chapterNum, reason });
         renderChapters('detail-chapters-list', state.detailEdit.chapters, true);
         updateTabCount('detail-tab-count-chapters', state.detailEdit.chapters.length);
       } else {
         // View mode - save directly to manga
         const manga = state.mangas.find(m => m.id === state.selectedMangaId);
         if (manga) {
+          const validation = getMaxFavoriteChapter(manga);
+          if (!validation.allowed) {
+            showToast(validation.reason, 'error');
+            return;
+          }
+          if (validation.max !== Infinity && chapterNum > validation.max) {
+            showToast(`Chapter ${chapterNum} exceeds your current progress (max: ${validation.max})! ⚠️`, 'error');
+            return;
+          }
+          if (isDuplicateChapter(manga.favoriteChapters || [], chapterNum)) {
+            if (!confirm(`Chapter ${chapterNum} is already in your favorites. Add anyway?`)) return;
+          }
           if (!manga.favoriteChapters) manga.favoriteChapters = [];
-          manga.favoriteChapters.push({ number: parseInt(num), reason });
+          manga.favoriteChapters.push({ number: chapterNum, reason });
           await saveMangaToCloud(manga);
           renderChapters('detail-chapters-list', manga.favoriteChapters, false);
           updateTabCount('detail-tab-count-chapters', manga.favoriteChapters.length);
@@ -1668,6 +1729,19 @@ function setupDetailPage() {
       document.getElementById('detail-chapter-reason').value = '';
     });
   }
+
+
+  // Chapter sort controls
+  document.querySelectorAll('#detail-chapter-sort-bar .sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#detail-chapter-sort-bar .sort-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.chapterSort = btn.dataset.sort;
+      const manga = state.mangas.find(m => m.id === state.selectedMangaId);
+      const chapters = state.editMode ? state.detailEdit.chapters : (manga?.favoriteChapters || []);
+      renderChapters('detail-chapters-list', chapters, state.editMode);
+    });
+  });
 
   const detailPhotoUpload = document.getElementById('detail-photo-upload');
   const detailPhotoInput = document.getElementById('detail-photo-input');
@@ -2119,6 +2193,83 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+
+
+
+// ===== CHAPTER VALIDATION & SORTING =====
+function getMaxFavoriteChapter(manga) {
+  if (!manga || !manga.myStatus) {
+    return { allowed: false, reason: 'Unknown status' };
+  }
+  const myStatus = manga.myStatus;
+  if (myStatus === "Didn't start yet") {
+    return { allowed: false, reason: "You haven't started this manga yet! Change your status first." };
+  }
+  const droppedMatch = myStatus.match(/Dropped \(at chapter (\d+)\)/);
+  if (droppedMatch) {
+    return { allowed: true, max: parseInt(droppedMatch[1]) };
+  }
+  const inChapterMatch = myStatus.match(/In Chapter (\d+)/);
+  if (inChapterMatch) {
+    return { allowed: true, max: parseInt(inChapterMatch[1]) };
+  }
+  if (myStatus.startsWith('Completed')) {
+    const mangaStatus = manga.mangaStatus || '';
+    const mangaMatch = mangaStatus.match(/(?:Completed|Stopped) \(at chapter (\d+)\)/);
+    if (mangaMatch) {
+      return { allowed: true, max: parseInt(mangaMatch[1]) };
+    }
+    return { allowed: true, max: Infinity };
+  }
+  return { allowed: true, max: Infinity };
+}
+
+function getMaxFavoriteChapterFromForm(context) {
+  let myStatusVal, droppedChapter, currentChapter, mangaStatusChapter;
+  if (context === 'add') {
+    myStatusVal = document.getElementById('my-status').value;
+    droppedChapter = document.getElementById('dropped-chapter').value;
+    currentChapter = document.getElementById('current-chapter').value;
+    mangaStatusChapter = document.getElementById('manga-status-chapter').value;
+  } else if (context === 'detail') {
+    myStatusVal = document.getElementById('detail-edit-my-status-select').value;
+    droppedChapter = document.getElementById('detail-edit-dropped-chapter').value;
+    currentChapter = state.detailEdit.currentChapter;
+    mangaStatusChapter = document.getElementById('detail-edit-manga-status-chapter').value;
+  }
+  if (myStatusVal === "Didn't start yet") {
+    return { allowed: false, reason: "You haven't started this manga yet! Change your status first." };
+  }
+  if (myStatusVal === 'Dropped') {
+    const chap = parseInt(droppedChapter) || 0;
+    if (chap > 0) return { allowed: true, max: chap };
+    return { allowed: false, reason: 'Please enter a dropped chapter number first.' };
+  }
+  if (myStatusVal === 'In Chapter') {
+    const chap = parseInt(currentChapter) || 0;
+    if (chap > 0) return { allowed: true, max: chap };
+    return { allowed: false, reason: 'Please enter a current chapter number first.' };
+  }
+  if (myStatusVal === 'Completed') {
+    const chap = parseInt(mangaStatusChapter) || 0;
+    if (chap > 0) return { allowed: true, max: chap };
+    return { allowed: true, max: Infinity };
+  }
+  return { allowed: true, max: Infinity };
+}
+
+function isDuplicateChapter(chapters, chapterNum) {
+  return chapters.some(ch => ch.number === chapterNum);
+}
+
+function syncChapterSortButtons(context) {
+  const prefix = context === 'add' ? 'add' : 'detail';
+  const container = document.getElementById(`${prefix}-chapter-sort-bar`);
+  if (!container) return;
+  container.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sort === state.chapterSort);
+  });
+}
 
 // ===== AUTO-SPLIT ALTERNATIVE TITLES =====
 function autoSplitTitles(text, mangaTitle = '') {
