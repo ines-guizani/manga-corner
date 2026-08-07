@@ -71,6 +71,10 @@ function setupAuth() {
       document.getElementById('user-avatar').src = user.photoURL || '';
       document.getElementById('user-avatar').style.display = 'block';
       document.getElementById('user-name').textContent = user.displayName || user.email;
+      const mobileAvatar = document.getElementById('mobile-user-avatar');
+      const mobileName = document.getElementById('mobile-user-name');
+      if (mobileAvatar) { mobileAvatar.src = user.photoURL || ''; mobileAvatar.style.display = 'block'; }
+      if (mobileName) mobileName.textContent = user.displayName || user.email;
       loadAppData();
     } else {
       state.currentUser = null;
@@ -431,6 +435,29 @@ function setupMobileMenu() {
   document.querySelectorAll('.mobile-link').forEach(link => {
     link.addEventListener('click', () => menu.classList.remove('open'));
   });
+
+  // Mobile theme toggle
+  const mobileThemeToggle = document.getElementById('mobile-theme-toggle');
+  if (mobileThemeToggle) {
+    mobileThemeToggle.addEventListener('click', () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem(THEME_KEY, 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem(THEME_KEY, 'dark');
+      }
+    });
+  }
+
+  // Mobile sign out
+  const mobileSignout = document.getElementById('mobile-signout-btn');
+  if (mobileSignout) {
+    mobileSignout.addEventListener('click', async () => {
+      await signOut(auth);
+    });
+  }
 }
 
 // ===== HOME =====
