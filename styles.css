@@ -1828,7 +1828,6 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   );
   transform: rotateY(-90deg) translateZ(16px);
   transform-origin: left center;
-  border-radius: 2px 0 0 2px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1855,8 +1854,8 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .book-pages {
   position: absolute;
   right: 0;
-  top: 1px;
-  bottom: 1px;
+  top: 0;
+  bottom: 0;
   width: 30px;
   background:
     linear-gradient(to bottom, #d5cdc0 0%, #e8e0d5 3%, #ddd5c8 6%),
@@ -1868,7 +1867,6 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
     );
   transform: rotateY(90deg) translateZ(94px);
   transform-origin: right center;
-  border-radius: 0 2px 2px 0;
   box-shadow: inset 2px 0 5px rgba(0,0,0,0.15);
 }
 
@@ -1878,33 +1876,30 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   inset: 0;
   background: linear-gradient(135deg, #3d2e2a, #2a1f18);
   transform: rotateY(180deg) translateZ(16px);
-  border-radius: 3px 2px 2px 3px;
 }
 
 /* Top of book */
 .book-top {
   position: absolute;
   top: 0;
-  left: 1px;
-  right: 1px;
+  left: 0;
+  right: 0;
   height: 32px;
   background: linear-gradient(to bottom, #e8e0d5, #d5cdc0);
   transform: rotateX(90deg) translateZ(16px);
   transform-origin: top center;
-  border-radius: 2px 2px 0 0;
 }
 
 /* Bottom of book */
 .book-bottom {
   position: absolute;
   bottom: 0;
-  left: 1px;
-  right: 1px;
+  left: 0;
+  right: 0;
   height: 32px;
   background: linear-gradient(to bottom, #d5cdc0, #c8c0b3);
   transform: rotateX(-90deg) translateZ(149px);
   transform-origin: bottom center;
-  border-radius: 0 0 2px 2px;
 }
 
 /* ===== EMPTY SHELF ===== */
