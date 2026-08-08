@@ -1673,7 +1673,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 /* The shelf structure */
 .shelf-track {
   position: relative;
-  height: 200px;
+  height: 240px;
   background:
     linear-gradient(to bottom,
       rgba(0,0,0,0) 0%,
@@ -1735,7 +1735,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .shelf-scroll {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 0;
   padding: 0 1.5rem;
   height: calc(100% - 18px);
   width: max-content;
@@ -1755,19 +1755,21 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 /* ===== 3D BOOK ===== */
 .book-3d {
-  width: 85px;
-  height: 130px;
+  width: 110px;
+  height: 165px;
   position: relative;
   transform-style: preserve-3d;
-  transform: perspective(1000px) rotateY(-28deg);
+  transform: perspective(1000px) rotateY(-22deg);
   transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   cursor: pointer;
   flex-shrink: 0;
   margin-bottom: 2px;
+  margin-right: -6px;
 }
 .book-3d:hover {
-  transform: perspective(1000px) rotateY(-12deg) translateZ(50px) translateY(-20px);
+  transform: perspective(1000px) rotateY(-8deg) translateZ(60px) translateY(-24px);
   z-index: 1000;
+  margin-right: 8px;
 }
 
 /* Front cover */
@@ -1777,7 +1779,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   background-size: cover;
   background-position: center;
   border-radius: 2px 3px 3px 2px;
-  transform: translateZ(13px);
+  transform: translateZ(16px);
   box-shadow:
     inset 3px 0 10px rgba(255,255,255,0.08),
     inset -2px 0 8px rgba(0,0,0,0.25),
@@ -1814,14 +1816,14 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   left: 0;
   top: 0;
   bottom: 0;
-  width: 26px;
+  width: 32px;
   background: linear-gradient(90deg,
     #1a0f08 0%,
     #3d2e2a 25%,
     #5a4a40 60%,
     #4a3a30 100%
   );
-  transform: rotateY(-90deg) translateZ(13px);
+  transform: rotateY(-90deg) translateZ(16px);
   transform-origin: left center;
   border-radius: 2px 0 0 2px;
   display: flex;
@@ -1834,14 +1836,14 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   writing-mode: vertical-rl;
   text-orientation: mixed;
   transform: rotate(180deg);
-  font-size: 0.58rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: rgba(255,255,255,0.82);
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-height: 100px;
+  max-height: 120px;
   letter-spacing: 0.06em;
   padding: 4px 0;
 }
@@ -1852,19 +1854,19 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   right: 0;
   top: 1px;
   bottom: 1px;
-  width: 24px;
+  width: 30px;
   background:
-    linear-gradient(to bottom, #e8e0d5 0%, #f5f0e8 3%, #f0ebe0 6%),
+    linear-gradient(to bottom, #d5cdc0 0%, #e8e0d5 3%, #ddd5c8 6%),
     repeating-linear-gradient(
       to bottom,
-      #f5f0e8 0px,
-      #f0ebe0 1.5px,
-      #f5f0e8 3px
+      #e8e0d5 0px,
+      #ddd5c8 1.5px,
+      #e8e0d5 3px
     );
-  transform: rotateY(90deg) translateZ(72px);
+  transform: rotateY(90deg) translateZ(94px);
   transform-origin: right center;
   border-radius: 0 2px 2px 0;
-  box-shadow: inset 2px 0 5px rgba(0,0,0,0.08);
+  box-shadow: inset 2px 0 5px rgba(0,0,0,0.15);
 }
 
 /* Back of book */
@@ -1872,7 +1874,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, #3d2e2a, #2a1f18);
-  transform: rotateY(180deg) translateZ(13px);
+  transform: rotateY(180deg) translateZ(16px);
   border-radius: 3px 2px 2px 3px;
 }
 
@@ -1882,9 +1884,9 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   top: 0;
   left: 1px;
   right: 1px;
-  height: 26px;
-  background: linear-gradient(to bottom, #f5f0e8, #e8e0d5);
-  transform: rotateX(90deg) translateZ(13px);
+  height: 32px;
+  background: linear-gradient(to bottom, #e8e0d5, #d5cdc0);
+  transform: rotateX(90deg) translateZ(16px);
   transform-origin: top center;
   border-radius: 2px 2px 0 0;
 }
@@ -1895,9 +1897,9 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   bottom: 0;
   left: 1px;
   right: 1px;
-  height: 26px;
-  background: linear-gradient(to bottom, #e8e0d5, #ddd5c8);
-  transform: rotateX(-90deg) translateZ(117px);
+  height: 32px;
+  background: linear-gradient(to bottom, #d5cdc0, #c8c0b3);
+  transform: rotateX(-90deg) translateZ(149px);
   transform-origin: bottom center;
   border-radius: 0 0 2px 2px;
 }
@@ -2183,27 +2185,27 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 @media (max-width: 640px) {
   .book-3d {
-    width: 70px;
-    height: 108px;
+    width: 85px;
+    height: 128px;
   }
   .book-spine {
-    width: 22px;
+    width: 26px;
   }
   .book-spine-text {
-    font-size: 0.5rem;
-    max-height: 80px;
+    font-size: 0.55rem;
+    max-height: 90px;
   }
   .book-pages {
-    width: 20px;
-    transform: rotateY(90deg) translateZ(60px);
+    width: 24px;
+    transform: rotateY(90deg) translateZ(73px);
   }
   .book-top, .book-bottom {
-    height: 22px;
+    height: 26px;
   }
   .book-bottom {
-    transform: rotateX(-90deg) translateZ(96px);
+    transform: rotateX(-90deg) translateZ(114px);
   }
   .shelf-track {
-    height: 170px;
+    height: 195px;
   }
 }
