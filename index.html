@@ -10,13 +10,14 @@
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+  <link rel="preload" as="image" href="library-bg.jpg" fetchpriority="high">
 <base target="_blank">
 </head>
 <body>
 
   <!-- ===== LOGIN SCREEN ===== -->
   <div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;font-family:'Nunito',sans-serif;">
-    <img src="mascot.png" alt="Mascot" style="width:100px;animation:float 3s ease-in-out infinite;">
+    <img src="mascot.png" alt="Mascot" style="width:100px;animation:float 3s ease-in-out infinite;background:linear-gradient(135deg,#f5c89a,#e88a9a);border-radius:50%;">
     <h1 style="font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#e88a9a,#f5c89a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">The Manga Corner</h1>
     <p style="color:#8a7268;font-size:0.95rem;">Your private manga collection 🌸</p>
     <button id="google-signin-btn" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:999px;border:1.5px solid #e0d0c8;background:white;color:#3d2e2a;font-size:1rem;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.08);transition:all 0.2s;">
@@ -28,7 +29,7 @@
 
   <!-- ===== LOADING SCREEN ===== -->
   <div id="loading-screen" style="display:none;position:fixed;inset:0;z-index:9998;background:var(--bg,#fff8f5);flex-direction:column;align-items:center;justify-content:center;gap:1rem;font-family:'Nunito',sans-serif;">
-    <img src="mascot.png" alt="Loading" style="width:80px;animation:float 1.5s ease-in-out infinite;">
+    <img src="mascot.png" alt="Loading" style="width:80px;animation:float 1.5s ease-in-out infinite;background:linear-gradient(135deg,#f5c89a,#e88a9a);border-radius:50%;">
     <p style="color:#e88a9a;font-weight:700;font-size:1rem;">Loading your collection... ☁️</p>
   </div>
 
@@ -49,7 +50,7 @@
   <header class="navbar">
     <nav class="nav-container">
       <a href="#" class="logo" data-link>
-        <img src="mascot.png" alt="Mascot" class="logo-img" id="logo-img">
+        <img src="mascot.png" alt="Mascot" class="logo-img" id="logo-img" style="background:linear-gradient(135deg,#f5c89a,#e88a9a);border-radius:50%;">
         <span class="logo-text gradient-text">Manga Corner</span>
       </a>
       <div class="nav-links" id="nav-links">
@@ -105,7 +106,7 @@
   <main class="page" id="page-home">
     <section class="hero">
       <div class="hero-bg">
-        <img src="hero-bg.jpg" alt="" class="hero-bg-img">
+        <img src="library-bg.jpg" alt="" class="hero-bg-img" loading="eager" decoding="async" fetchpriority="high">
         <div class="hero-overlay"></div>
       </div>
       <div class="hero-content">
@@ -131,7 +132,7 @@
             You have <strong id="hero-count-num">0</strong> manga in your collection!
           </p>
         </div>
-        <img src="mascot.png" alt="Cute mascot" class="hero-mascot animate-float">
+        <img src="mascot.png" alt="Cute mascot" class="hero-mascot animate-float" loading="eager" decoding="async">
       </div>
     </section>
 
@@ -650,7 +651,7 @@
       <div class="footer-right">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:hsl(var(--primary))"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         2025 The Manga Corner
-        <img src="mascot.png" alt="" class="footer-mascot">
+        <img src="mascot.png" alt="" class="footer-mascot" style="background:linear-gradient(135deg,#f5c89a,#e88a9a);border-radius:50%;">
       </div>
     </div>
   </footer>
