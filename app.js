@@ -470,6 +470,7 @@ function renderHome() {
   } else {
     countEl.style.display = 'none';
   }
+  renderBookshelves();
 }
 
 // ===== STAR RATING =====
@@ -2494,6 +2495,215 @@ function getMaxChapterFromMangaStatus(mangaStatus) {
   const match = mangaStatus.match(/at chapter (\d+)/);
   return match ? parseInt(match[1]) : null;
 }
+
+
+// ===== BOOKSHELF HOME =====
+function getShelfMangas(statusFilter) {
+  return state.mangas.filter(m => {
+    if (!m.myStatus) return false;
+    if (statusFilter === 'reading') return m.myStatus.startsWith('In Chapter');
+    if (statusFilter === 'completed') return m.myStatus.startsWith('Completed');
+    if (statusFilter === 'planned') return m.myStatus === "Didn't start yet";
+    if (statusFilter === 'dropped') return m.myStatus.startsWith('Dropped');
+    return false;
+  });
+}
+
+function createBook3D(manga) {
+  const hasCover = manga.cover && manga.cover.length > 100;
+  const spineBg = hasCover
+    ? `linear-gradient(90deg, #1a0f08 0%, #3d2e2a 40%, #5a4a40 100%)`
+    : `linear-gradient(90deg, #2a1a10, #4a3a30)`;
+
+  // Generate a deterministic color for the spine based on title if no cover
+  let spineColorClass = '';
+  if (!hasCover) {
+    const colors = ['#8b4513', '#556b2f', '#483d8b', '#8b0000', '#2f4f4f', '#800080', '#a0522d', '#4a6741'];
+    const idx = manga.title.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length;
+    spineColorClass = colors[idx];
+  }
+
+  const coverStyle = hasCover
+    ? `background-image: url('${manga.cover}')`
+    : `background: linear-gradient(135deg, ${spineColorClass || '#5a4a40'}, ${spineColorClass ? spineColorClass + 'aa' : '#3d2e2a'})`;
+
+  return `
+    <div class="book-3d" onclick="openBookModal('${manga.id}')" title="${escapeHtml(manga.title)}">
+      <div class="book-front" style="${coverStyle}"></div>
+      <div class="book-back"></div>
+      <div class="book-spine" style="background: ${hasCover ? spineBg : `linear-gradient(90deg, ${spineColorClass}dd, ${spineColorClass}88)`}">
+        <span class="book-spine-text">${escapeHtml(manga.title)}</span>
+      </div>
+      <div class="book-pages"></div>
+      <div class="book-top"></div>
+      <div class="book-bottom"></div>
+    </div>
+  `;
+}
+
+function renderShelf(shelfId, label, dotClass, mangaList) {
+  const container = document.getElementById('shelves-container');
+  if (!container) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'shelf-wrapper';
+
+  const count = mangaList.length;
+  const countText = count === 1 ? '1 book' : `${count} books`;
+
+  let booksHtml = '';
+  if (count === 0) {
+    booksHtml = '<div class="empty-shelf">No manga on this shelf yet</div>';
+  } else {
+    // Duplicate books 4x for seamless infinite scroll
+    for (let i = 0; i < 4; i++) {
+      mangaList.forEach(m => {
+        booksHtml += createBook3D(m);
+      });
+    }
+  }
+
+  // Calculate scroll duration: ~3 seconds per book, min 20s, max 80s
+  const scrollDuration = Math.max(20, Math.min(80, count * 3));
+
+  wrapper.innerHTML = `
+    <div class="shelf-label">
+      <span class="shelf-label-dot ${dotClass}"></span>
+      ${label}
+      <span class="shelf-count">(${countText})</span>
+    </div>
+    <div class="shelf-track">
+      <div class="shelf-scroll ${count > 0 ? 'animating' : ''}" style="--scroll-duration: ${scrollDuration}s;">
+        ${booksHtml}
+      </div>
+    </div>
+  `;
+
+  container.appendChild(wrapper);
+}
+
+function renderBookshelves() {
+  const container = document.getElementById('shelves-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const reading = getShelfMangas('reading');
+  const completed = getShelfMangas('completed');
+  const planned = getShelfMangas('planned');
+  const dropped = getShelfMangas('dropped');
+
+  renderShelf('shelf-reading', 'Currently Reading', 'reading', reading);
+  renderShelf('shelf-completed', 'Completed', 'completed', completed);
+  renderShelf('shelf-planned', 'Plan to Read', 'planned', planned);
+  renderShelf('shelf-dropped', 'Dropped', 'dropped', dropped);
+}
+
+// ===== BOOK MODAL =====
+function openBookModal(mangaId) {
+  const manga = state.mangas.find(m => m.id === mangaId);
+  if (!manga) return;
+
+  const modal = document.getElementById('book-modal');
+  const cover = document.getElementById('modal-cover');
+  const title = document.getElementById('modal-title');
+  const otherTitles = document.getElementById('modal-other-titles');
+  const badges = document.getElementById('modal-badges');
+  const ratingEl = document.getElementById('modal-rating');
+  const meta = document.getElementById('modal-meta');
+  const genres = document.getElementById('modal-genres');
+  const summary = document.getElementById('modal-summary');
+  const viewBtn = document.getElementById('modal-view-btn');
+
+  if (cover) {
+    cover.src = manga.cover || '';
+    cover.style.display = manga.cover ? 'block' : 'none';
+  }
+  if (title) title.textContent = manga.title;
+
+  if (otherTitles) {
+    if (manga.otherTitles) {
+      const alts = autoSplitTitles(manga.otherTitles, manga.title);
+      otherTitles.innerHTML = alts.map(t => `<span class="alt-title-tag">${escapeHtml(t)}</span>`).join('');
+      otherTitles.style.display = 'flex';
+    } else {
+      otherTitles.style.display = 'none';
+    }
+  }
+
+  if (badges) {
+    let mangaStatusClass = 'ongoing';
+    if (manga.mangaStatus && manga.mangaStatus.startsWith('Completed')) mangaStatusClass = 'completed';
+    else if (manga.mangaStatus && manga.mangaStatus.startsWith('Stopped')) mangaStatusClass = 'stopped';
+
+    let myClass = 'my-default';
+    if (manga.myStatus && manga.myStatus.startsWith('Completed')) myClass = 'my-completed';
+    else if (manga.myStatus && manga.myStatus.startsWith('Dropped')) myClass = 'my-dropped';
+    else if (manga.myStatus && manga.myStatus.startsWith('In Chapter')) myClass = 'my-inchapter';
+
+    badges.innerHTML = `
+      <span class="detail-badge ${mangaStatusClass}">${manga.mangaStatus || 'Ongoing'}</span>
+      <span class="detail-badge ${myClass}">${manga.myStatus || "Didn't start yet"}</span>
+      ${manga.year ? `<span class="detail-badge" style="background:rgba(212,184,224,0.15);color:#9060a0;">${escapeHtml(manga.year)}</span>` : ''}
+    `;
+  }
+
+  if (ratingEl) {
+    const r = manga.rating || 0;
+    let stars = '';
+    for (let i = 1; i <= 10; i++) {
+      stars += `<span class="star-display ${i <= r ? '' : 'empty'}">${i <= r ? '&#9733;' : '&#9734;'}</span>`;
+    }
+    ratingEl.innerHTML = stars + `<span class="rating-number">${r}/10</span>`;
+  }
+
+  if (meta) {
+    const maxChap = getMaxChapterFromMangaStatus(manga.mangaStatus);
+    const myChapMatch = manga.myStatus && manga.myStatus.match(/In Chapter (\d+)/);
+    const myChap = myChapMatch ? myChapMatch[1] : null;
+
+    let metaHtml = '';
+    if (myChap) {
+      metaHtml += `<span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> Chapter ${myChap}${maxChap ? ` / ${maxChap}` : ''}</span>`;
+    }
+    metaHtml += `<span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${new Date(manga.createdAt).toLocaleDateString()}</span>`;
+    meta.innerHTML = metaHtml;
+  }
+
+  if (genres) {
+    genres.innerHTML = manga.genre && manga.genre.map(g => `<span class="detail-genre-tag">${escapeHtml(g)}</span>`).join('');
+  }
+
+  if (summary) {
+    if (manga.summary) {
+      summary.innerHTML = escapeHtml(manga.summary);
+      summary.style.display = 'block';
+    } else {
+      summary.style.display = 'none';
+    }
+  }
+
+  if (viewBtn) {
+    viewBtn.href = `#detail/${manga.id}`;
+  }
+
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBookModal() {
+  const modal = document.getElementById('book-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeBookModal();
+  }
+});
 
 // ===== START =====
 document.addEventListener('DOMContentLoaded', setupAuth);
