@@ -2528,7 +2528,7 @@ function createBook3D(manga) {
     : `background: linear-gradient(135deg, ${spineColorClass || '#5a4a40'}, ${spineColorClass ? spineColorClass + 'aa' : '#3d2e2a'})`;
 
   return `
-    <div class="book-3d" onclick="openBookModal('${manga.id}')" title="${escapeHtml(manga.title)}">
+    <div class="book-3d" onclick="navigate('detail/${manga.id}')" title="${escapeHtml(manga.title)}">
       <div class="book-front" style="${coverStyle}"></div>
       <div class="book-back"></div>
       <div class="book-spine" style="background: ${hasCover ? spineBg : `linear-gradient(90deg, ${spineColorClass}dd, ${spineColorClass}88)`}">
