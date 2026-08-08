@@ -10,6 +10,7 @@
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 
@@ -134,28 +135,12 @@
       </div>
     </section>
 
-    <section class="features">
-      <div class="features-header">
-        <h2>What You Can Do</h2>
-        <p>Everything you need to manage your manga collection</p>
+        <section class="bookshelves-section" id="bookshelves-section">
+      <div class="shelves-header">
+        <h2>Your Manga Library</h2>
+        <p>Hover over any shelf to pause scrolling. Hover a book to lift it. Click to open.</p>
       </div>
-      <div class="features-grid">
-        <div class="feature-card cute-card">
-          <div class="feature-icon rose"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
-          <h3>Add Manga</h3>
-          <p>Save your favorite manga with details, cover images, and personal notes.</p>
-        </div>
-        <div class="feature-card cute-card">
-          <div class="feature-icon amber"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></div>
-          <h3>Track Progress</h3>
-          <p>Keep track of what you're reading, completed, or plan to read.</p>
-        </div>
-        <div class="feature-card cute-card">
-          <div class="feature-icon pink"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></div>
-          <h3>Save Favorites</h3>
-          <p>Remember favorite chapters, collect photos, and write your thoughts.</p>
-        </div>
-      </div>
+      <div id="shelves-container"></div>
     </section>
   </main>
 
@@ -685,7 +670,42 @@
     </div>
   </div>
 
-  </div><!-- end app-wrapper -->
+  
+  <!-- ===== BOOK OPEN MODAL ===== -->
+  <div id="book-modal" class="book-modal hidden">
+    <div class="book-modal-backdrop" onclick="closeBookModal()"></div>
+    <div class="book-modal-content">
+      <button class="book-modal-close" onclick="closeBookModal()">&times;</button>
+      <div class="book-open">
+        <div class="book-open-left">
+          <div class="book-open-cover-wrap">
+            <img id="modal-cover" src="" alt="">
+            <div class="book-open-cover-shadow"></div>
+          </div>
+        </div>
+        <div class="book-page-divider"></div>
+        <div class="book-open-right">
+          <div class="book-open-page-inner">
+            <h2 id="modal-title"></h2>
+            <div id="modal-other-titles"></div>
+            <div id="modal-badges"></div>
+            <div id="modal-rating"></div>
+            <div id="modal-meta"></div>
+            <div id="modal-genres"></div>
+            <div id="modal-summary"></div>
+            <div class="book-modal-actions">
+              <a id="modal-view-btn" href="#" class="btn btn-primary" data-link>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                View Full Details
+              </a>
+              <button class="btn btn-secondary" onclick="closeBookModal()">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- end app-wrapper -->
   <div id="toast" class="toast"></div>
 
   <script type="module" src="app.js"></script>
